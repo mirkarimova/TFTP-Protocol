@@ -30,7 +30,7 @@ int sockfd;
 /* Temporary variables, counters and buffers.                      */
 
 	int    n, clilen;
-	char   buff[516];
+	char   buffer[516];
 
 /* Main echo server loop. Note that it never terminates, as there  */
 /* is no way for UDP to know when the data are finished.           */
@@ -45,7 +45,7 @@ int sockfd;
 /* bytes, and store them in mesg. The sender's address is stored   */
 /* in pcli_addr and the structure's size is stored in clilen.      */
 		
-		n = recvfrom(sockfd, buff, 516, 0, &pcli_addr, &clilen);
+		n = recvfrom(sockfd, buffer, 516, 0, &pcli_addr, &clilen);
 		
 /* n holds now the number of received bytes, or a negative number  */
 /* to show an error condition. Notice how we use progname to label */
@@ -62,12 +62,12 @@ int sockfd;
 			}
 
 		for (int i = 0; i < 30; i++) {
-			fprintf(stderr, "0x%X,", buff[i]);
+			fprintf(stderr, "0x%X,", buffer[i]);
 		}
 
 		fprintf(stderr, "\n");
 
-		if (sendto(sockfd, buff, n, 0, &pcli_addr, clilen) != n) 
+		if (sendto(sockfd, buffer, n, 0, &pcli_addr, clilen) != n) 
 			{
 				printf("%s: sendto error\n",progname);
 			 	exit(4);
