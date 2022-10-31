@@ -158,7 +158,89 @@ int sockfd;
 		// WRQ
 		else if (opCodeRcv == 2) 
 		{	
+			// Retrieve filename
+			char fileName[100];
+			bcopy(buffer + REQUEST_OFFSET, fileName, sizeof(fileName));
 
+			/* ---------- FOR DEBUGGING ---------- */
+			// Print filename recieved from client
+			fprintf(stderr, "Recieved filename: %s\n", fileName);
+			/* ------------------------------------ */
+
+			// Construct ACK Packet
+			char ackPacket[MAX_BUFF_SIZE];
+			bzero(ackPacket, sizeof(ackPacket));
+
+			unsigned short *opCodePtr = (unsigned short*) ackPacket;
+			// Opcode for data packet is 4 (RFC 1350)
+			*opCodePtr = htons(4);
+			opCodePtr++;
+			
+			unsigned short blockNum = 0;
+			unsigned short *blockNumPtr = opCodePtr;
+			*blockNumPtr = htons(blockNum);
+
+			/* ---------- FOR DEBUGGING ---------- */
+			// Print the ACK packet that is sent to the client
+			fprintf(stderr, "-------------------\n");
+			fprintf(stderr, "Sent ACK packet\n");
+			for (int i = 0; i < 30; i++) 
+			{
+				fprintf(stderr, "0x%X,", ackPacket[i]);
+			}
+			fprintf(stderr, "\n-------------------\n");
+			fprintf(stderr, "\n");
+			/* ------------------------------------ */
+
+			// Send ACK
+			if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+			{
+				printf("%s: sendto error on socket\n",progname);
+				exit(3);
+			}
+
+			// Recieve Data
+			// Reset buffer
+			bzero (buffer, sizeof(buffer));
+
+			// Recieve file from server
+			int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
+			
+			// Error check recieve
+			if (n < 0)
+			{
+				printf("%s: recvfrom error\n",progname);
+				exit(3);
+			}
+			else 
+			{
+				fprintf(stderr, "Successful recieve\n");
+			}
+
+			/* ---------- FOR DEBUGGING ---------- */
+			// Print the recieved data packet from the server
+			fprintf(stderr, "-------------------\n");
+			fprintf(stderr, "Recieved data packet\n");
+			for (int i = 0; i < 30; i++) 
+			{
+				fprintf(stderr, "0x%X,", buffer[i]);
+			}
+			fprintf(stderr, "\n-------------------\n");
+			fprintf(stderr, "\n");
+			/* ------------------------------------ */
+			
+			// Copy only the file data to write
+			char data[512];
+			bcopy(buffer + DATA_OFFSET, data, sizeof(data));
+
+			// Write the data to a file
+			FILE *fp = fopen(fileName, "w+");
+			if (fputs(data, fp) == EOF)
+			{
+				perror("Error fputs");
+				exit(1);
+			}
+			fclose(fp);
 		}
 		else 
 		{
