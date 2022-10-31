@@ -1,5 +1,5 @@
 //for system calls, please refer to the MAN pages help in Linux 
-//sample echo tensmit receive program over udp - CSS432 - Autumn 2022
+// Extended echo demo code for the group project
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -14,6 +14,9 @@
 #define SERV_UDP_PORT   51145 // REPLACE WITH YOUR PORT NUMBER
 
 char *progname;
+const static int MAX_BUFF_SIZE = 516;
+const static int DATA_OFFSET = 4;
+const static int REQUEST_OFFSET = 2;
 
 server_listen(sockfd) 
 int sockfd;
@@ -30,7 +33,7 @@ int sockfd;
 /* Temporary variables, counters and buffers.                      */
 
 	int    n, clilen;
-	char   buffer[516];
+	char   buffer[MAX_BUFF_SIZE];
 
 /* Main echo server loop. Note that it never terminates, as there  */
 /* is no way for UDP to know when the data are finished.           */
@@ -41,41 +44,127 @@ int sockfd;
 
 		clilen = sizeof(struct sockaddr);
 
-/* Receive data on socket sockfd, up to a maximum of MAXMESG       */
-/* bytes, and store them in mesg. The sender's address is stored   */
+/* Receive data on socket sockfd, up to a maximum of MAX_BUFF_SIZE */
+/* bytes, and store them in buffer. The sender's address is stored   */
 /* in pcli_addr and the structure's size is stored in clilen.      */
 		
-		n = recvfrom(sockfd, buffer, 516, 0, &pcli_addr, &clilen);
+		n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
 		
 /* n holds now the number of received bytes, or a negative number  */
 /* to show an error condition. Notice how we use progname to label */
 /* the source of the error.                                        */
 
 		if (n < 0)
-			{
-			 printf("%s: recvfrom error\n",progname);
-			 exit(3);
-			}
+		{
+			printf("%s: recvfrom error\n",progname);
+			exit(3);
+		}
 		else 
-			{
-				fprintf(stderr, "Successful recieve\n");
-			}
-
-		for (int i = 0; i < 30; i++) {
-			fprintf(stderr, "0x%X,", buffer[i]);
+		{
+			fprintf(stderr, "Successful recieve\n");
 		}
 
-		fprintf(stderr, "\n");
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print the recieved request packet from the client
+		fprintf(stderr, "-------------------\n");
+		fprintf(stderr, "Recieved request packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			fprintf(stderr, "0x%X,", buffer[i]);
+		}
+		fprintf(stderr, "\n-------------------\n");
+		/* ------------------------------------ */
 
-		if (sendto(sockfd, buffer, n, 0, &pcli_addr, clilen) != n) 
+		// Determine opcode
+		unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+		unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+		fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+		int len = 2;
+
+		// RRQ
+		if (opCodeRcv == 1) 
+		{
+			// Retrieve filename
+			char fileName[100];
+			bcopy(buffer + REQUEST_OFFSET, fileName, sizeof(fileName));
+
+			/* ---------- FOR DEBUGGING ---------- */
+			// Print filename recieved from client
+			fprintf(stderr, "Recieved filename: %s\n", fileName);
+			/* ------------------------------------ */
+			
+			// Construct data packet
+			char dataPacket[MAX_BUFF_SIZE];
+			bzero(dataPacket, sizeof(dataPacket));
+
+			unsigned short *opCodePtr = (unsigned short*) dataPacket;
+			// Opcode for data packet is 3 (RFC 1350)
+			*opCodePtr = htons(3);
+			opCodePtr++;
+			
+			unsigned short blockNum = 1;
+			unsigned short *blockNumPtr = opCodePtr;
+			*blockNumPtr = htons(blockNum);
+
+			char *fileData = dataPacket + DATA_OFFSET;
+
+			// Get file data from fileName
+			char *file;
+			FILE *fp;
+			long len;
+
+			fp = fopen(fileName, "rb"); 
+			if (!fp)
 			{
-				printf("%s: sendto error\n",progname);
-			 	exit(4);
+				perror("Error fopen");
+				exit(1);
 			}
-		else
+
+			// Determine amount of bytes of file
+			fseek(fp, 0L, SEEK_END);
+			len = ftell(fp);
+			rewind(fp);
+
+			// Allocate mem to the file variable then read the bytes to file
+			file = (char *)malloc(len * sizeof(char));
+			fread(file, len, 1, fp);
+			fclose(fp);
+
+			// Copy the file data bytes into the correct location of the data packet
+			bcopy(file, fileData, strlen(file));
+
+			// Clear mem
+			free(file);
+
+			/* ---------- FOR DEBUGGING ---------- */
+			// Print the datapacket that is sent to the client
+			fprintf(stderr, "-------------------\n");
+			fprintf(stderr, "Sent RRQ datapacket\n");
+			for (int i = 0; i < 30; i++) 
 			{
-				fprintf(stderr, "Successful send\n");
+				fprintf(stderr, "0x%X,", dataPacket[i]);
 			}
+			fprintf(stderr, "\n-------------------\n");
+			fprintf(stderr, "\n");
+			/* ------------------------------------ */
+
+			// Send datapacket
+			if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+			{
+				printf("%s: sendto error on socket\n",progname);
+				exit(3);
+			}
+		}
+		// WRQ
+		else if (opCodeRcv == 2) 
+		{	
+
+		}
+		else 
+		{
+			printf("%s: invalid opcode recieved\n",progname);
+			exit(3);
+		}
 	}
 }
 

@@ -1,9 +1,4 @@
-
 //Sample program at client side for echo transmit-receive - CSS 432 - Autumn 2022
-
-
-
-
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -25,8 +20,10 @@
 /* A pointer to the name of this program for error reporting.      */
 
 char *progname;
+const static int MAX_BUFF_SIZE = 516;
+const static int DATA_OFFSET = 4;
 
-send_packet(sockfd, pserv_addr, servlen)
+send_packet(sockfd, pserv_addr, servlen, op)
 int sockfd;
 struct sockaddr *pserv_addr;
 int servlen;
@@ -34,37 +31,87 @@ int servlen;
 	char buffer[516];
 	bzero (buffer, sizeof(buffer));
 
-	unsigned short opCode = 3;
-	unsigned short *opCodePtr = (unsigned short*) buffer;
-	*opCodePtr = htons(3);
-	opCodePtr++;
+	// RRQ
+	if (op == 1)
+	{
+		// Construct RRQ packet
+		int len = 0;
 
-	unsigned short blockNum = 1;
-	unsigned short *blockNumberPtr = opCodePtr;
-	*blockNumberPtr = htons(blockNum);
+		unsigned short opCode = htons(1);
+		memcpy(buffer, &opCode, 2);
+		len += 2;
 
-	char *fileData = buffer + 4;
-	char file[] = "This is a demo";
-	strncpy(fileData, file, strlen(file));
+		char fileName[] = "readtest.txt\0";
+		strncpy(buffer + len, fileName, strlen(fileName));
+		len += strlen(fileName) + 1;
 
-	for (int i = 0; i < 30; i++) {
-		printf("0x%X,", buffer[i]);
-	}
+		char mode[] = "NETASCII\0";
+		strncpy(buffer + len, mode, strlen(mode));
 
-	if (sendto(sockfd, buffer, 516, 0, pserv_addr, servlen) != 516) 
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print the request packet that is sent to the server
+		fprintf(stderr, "\n-------------------\n");
+		fprintf(stderr, "Sent Request Packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			fprintf(stderr, "0x%X,", buffer[i]);
+		}
+		fprintf(stderr, "\n-------------------\n");
+		/* ------------------------------------ */
+
+		// Send RRQ packet
+		if (sendto(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != 516) 
 		{
 			printf("%s: sendto error on socket\n",progname);
 			exit(3);
 		}
 
-	if (recvfrom(sockfd, buffer, 516, 0, NULL, NULL) < 0)
-	 	{
+		// Reset buffer
+		bzero (buffer, sizeof(buffer));
+
+		// Recieve file from server
+		int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pserv_addr, &servlen);
+		
+		// Error check recieve
+		if (n < 0)
+		{
 			printf("%s: recvfrom error\n",progname);
-			 exit(4);
+			exit(3);
 		}
-	printf("\nRecieved back from server\n");
-	for (int i = 0; i < 30; i++) {
-		printf("0x%X,", buffer[i]);
+		else 
+		{
+			fprintf(stderr, "Successful recieve\n");
+		}
+
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print the recieved data packet from the server
+		fprintf(stderr, "-------------------\n");
+		fprintf(stderr, "Recieved data packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			fprintf(stderr, "0x%X,", buffer[i]);
+		}
+		fprintf(stderr, "\n-------------------\n");
+		fprintf(stderr, "\n");
+		/* ------------------------------------ */
+		
+		// Copy only the file data to write
+		char data[512];
+		bcopy(buffer + DATA_OFFSET, data, sizeof(data));
+
+		// Write the data to a file
+		FILE *fp = fopen(fileName, "w+");
+		if (fputs(data, fp) == EOF)
+		{
+			perror("Error fputs");
+			exit(1);
+		}
+		fclose(fp);
+	}
+	// WRQ
+	else if (op == 2) 
+	{
+		
 	}
 } 	
 
@@ -83,6 +130,8 @@ char    *argv[];
 	
 	struct sockaddr_in      cli_addr, serv_addr;
 	progname = argv[0];
+	// Args to input with ./client opcode file
+	int op = atoi(argv[1]);
 
 /* Initialize first the server's data with the well-known numbers. */
 
@@ -133,7 +182,7 @@ char    *argv[];
 		 exit(2);
 		}
 
-	send_packet(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+	send_packet(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr), op);
 
 /* We return here after the client sees the EOF and terminates.    */
 /* We can now release the socket and exit normally.                */
