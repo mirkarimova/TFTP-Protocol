@@ -23,16 +23,19 @@ char *progname;
 const static int MAX_BUFF_SIZE = 516;
 const static int DATA_OFFSET = 4;
 
-send_packet(sockfd, pserv_addr, servlen, op)
+void send_packet(sockfd, pserv_addr, servlen, request, fileName)
 int sockfd;
 struct sockaddr *pserv_addr;
 int servlen;
+char *request;
+char *fileName; 
 {
+
 	char buffer[516];
 	bzero (buffer, sizeof(buffer));
 
 	// RRQ
-	if (op == 1)
+	if (strcmp(request, "-r") == 0)
 	{
 		// Construct RRQ packet
 		int len = 0;
@@ -41,7 +44,6 @@ int servlen;
 		memcpy(buffer, &opCode, 2);
 		len += 2;
 
-		char fileName[] = "readtest.txt\0";
 		strncpy(buffer + len, fileName, strlen(fileName));
 		len += strlen(fileName) + 1;
 
@@ -109,7 +111,7 @@ int servlen;
 		fclose(fp);
 	}
 	// WRQ
-	else if (op == 2) 
+	else if (strcmp(request, "-w") == 0) 
 	{
 		// Construct WRQ packet
 		int len = 0;
@@ -118,7 +120,6 @@ int servlen;
 		memcpy(buffer, &opCode, 2);
 		len += 2;
 
-		char fileName[] = "writetest.txt\0";
 		strncpy(buffer + len, fileName, strlen(fileName));
 		len += strlen(fileName) + 1;
 
@@ -254,7 +255,7 @@ int servlen;
 /* and the server's address and port (well-known numbers) before   */
 /* calling the dg_cli main loop.                                   */
 
-main(argc, argv)
+int main(argc, argv)
 int     argc;
 char    *argv[];
 {
@@ -265,8 +266,15 @@ char    *argv[];
 	
 	struct sockaddr_in      cli_addr, serv_addr;
 	progname = argv[0];
+	
 	// Args to input with ./client opcode file
-	int op = atoi(argv[1]);
+	char request[50];
+	strcpy(request, argv[1]);
+	char filename[50];
+	strcpy(filename, argv[2]);
+	printf("%s\n", request);
+	printf("%s\n", filename);
+
 
 /* Initialize first the server's data with the well-known numbers. */
 
@@ -317,7 +325,7 @@ char    *argv[];
 		 exit(2);
 		}
 
-	send_packet(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr), op);
+	send_packet(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr), request, filename);
 
 /* We return here after the client sees the EOF and terminates.    */
 /* We can now release the socket and exit normally.                */
