@@ -68,47 +68,93 @@ char *fileName;
 			exit(3);
 		}
 
-		// Reset buffer
-		bzero (buffer, sizeof(buffer));
-
-		// Recieve file from server
-		int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pserv_addr, &servlen);
-		
-		// Error check recieve
-		if (n < 0)
-		{
-			printf("%s: recvfrom error\n",progname);
-			exit(3);
-		}
-		else 
-		{
-			fprintf(stderr, "Successful recieve\n");
-		}
-
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the recieved data packet from the server
-		fprintf(stderr, "-------------------\n");
-		fprintf(stderr, "Recieved data packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			fprintf(stderr, "0x%X,", buffer[i]);
-		}
-		fprintf(stderr, "\n-------------------\n");
-		fprintf(stderr, "\n");
-		/* ------------------------------------ */
-		
-		// Copy only the file data to write
-		char data[512];
-		bcopy(buffer + DATA_OFFSET, data, sizeof(data));
-
-		// Write the data to a file
+		int fileEnd = 0; 
 		FILE *fp = fopen(fileName, "w+");
-		if (fputs(data, fp) == EOF)
-		{
-			perror("Error fputs");
-			exit(1);
+		unsigned short blockNum = -1;
+		while(fileEnd == 0){
+			
+			blockNum++;
+
+			// Reset buffer
+			bzero (buffer, sizeof(buffer));
+
+			// Recieve file from server
+			int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen);
+			// Error check recieve
+			if (n < 0)
+			{
+				printf("%s: recvfrom error\n",progname);
+				exit(3);
+			}
+			else 
+			{
+				fprintf(stderr, "Successful recieve: %d\n: ", n);
+			}
+
+			/* ---------- FOR DEBUGGING ---------- */
+			// Print the recieved data packet from the server
+			fprintf(stderr, "-------------------\n");
+			fprintf(stderr, "Recieved data packet\n");
+			for (int i = 0; i < 30; i++) 
+			{
+			fprintf(stderr, "0x%X,", buffer[i]);
+			}
+			fprintf(stderr, "\n-------------------\n");
+			fprintf(stderr, "\n");
+			/* ------------------------------------ */
+
+			// Copy only the file data to write
+			char data[512];
+			bcopy(buffer + DATA_OFFSET, data, sizeof(data));
+
+			// Write the data to a file
+			//FILE *fp = fopen(fileName, "w+");
+			if (fputs(data, fp) == EOF)
+			{
+				perror("Error fputs");
+				exit(1);
+			}
+			if(n < 516){
+				printf("\nAT THE END");
+				fileEnd = 1; 
+				break;
+			}else if(n == 516){  // SEND ACK PACKET 
+				// Construct ACK Packet
+				char ackPacket[MAX_BUFF_SIZE];
+				bzero(ackPacket, sizeof(ackPacket));
+
+				unsigned short *opCodePtr = (unsigned short*) ackPacket;
+				// Opcode for data packet is 4 (RFC 1350)
+				*opCodePtr = htons(4);
+				opCodePtr++;
+			
+				unsigned short *blockNumPtr = opCodePtr;
+				*blockNumPtr = htons(blockNum);
+
+				/* ---------- FOR DEBUGGING ---------- */
+				// Print the ACK packet that is sent to the client
+				fprintf(stderr, "-------------------\n");
+				fprintf(stderr, "Sent ACK packet\n");
+				for (int i = 0; i < 30; i++) 
+				{
+					fprintf(stderr, "0x%X,", ackPacket[i]);
+				}
+				fprintf(stderr, "\n-------------------\n");
+				fprintf(stderr, "\n");
+				/* ------------------------------------ */
+
+				// Send ACK
+				if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, pserv_addr, servlen) == -1 )  
+				{
+					printf("%s: sendto error on socket\n",progname);
+					printf("Errno: %d", errno);
+					exit(3);
+				}	
+				//fileEnd = 1; 
+			}
 		}
 		fclose(fp);
+
 	}
 	// WRQ
 	else if (strcmp(request, "-w") == 0) 
