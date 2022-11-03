@@ -92,12 +92,10 @@ int sockfd;
 			// Print filename recieved from client
 			fprintf(stderr, "Recieved filename: %s\n", fileName);
 			/* ------------------------------------ */
-			
-			// Construct data packet
-			char dataPacket[MAX_BUFF_SIZE];
+		
 			
 			int fileEnd = 0;
-			unsigned short blockNum = -1;
+			unsigned short blockNum = 0;
 
 			FILE *fp = fopen(fileName, "r");
   			fseek(fp, 0, SEEK_END);
@@ -105,64 +103,133 @@ int sockfd;
  			printf("Size of file: %d\n\n", sizeFile);
   			fseek(fp, 0, SEEK_SET);
 
-			while(fileEnd == 0){
+			// how many bytes left in extra packet 
+				int bytesLeft = sizeFile % 512;
+				printf("BYTES LEFT IN EXTRA PACKET: %d\n", bytesLeft);
+
+			// how many full packets sent 
+				int numPackets = sizeFile / 512;
+				printf("Number of full packets sent: %d\n", numPackets);
+
+
+			// Construct Data packet for full packet
+				char dataPacket[MAX_BUFF_SIZE];
+
+			// Construct Data packet for partial packet 
+				char partialPacket[bytesLeft + 4];
+
+			while(fileEnd <= (numPackets + 1)){
 				
+				fileEnd++;
 				blockNum++;
+
+				// Full packets 
 				bzero(dataPacket, sizeof(dataPacket));
 				unsigned short *opCodePtr = (unsigned short*) dataPacket;
-				// Opcode for data packet is 3 (RFC 1350)
-				*opCodePtr = htons(3);
+				*opCodePtr = htons(3);   // Opcode for data packet is 3 (RFC 1350)
 				opCodePtr++;
-			
 				unsigned short *blockNumPtr = opCodePtr;
 				*blockNumPtr = htons(blockNum);
-
 				char *fileData = dataPacket + DATA_OFFSET;
+
+				// Partial Packet
+				bzero(partialPacket, sizeof(partialPacket));
+				unsigned short *opCodePtr2 = (unsigned short*) partialPacket;
+				*opCodePtr2 = htons(3);
+				opCodePtr++;
+				unsigned short *blockNumPtr2 = opCodePtr2;
+				*blockNumPtr2 = htons(blockNum);
+				char *fileData2 = partialPacket + DATA_OFFSET;
+
+
 
 				// Get file data from fileName
 				char *file;
-			
+				int numbyte = 0;
 
-				// Allocate mem to the file variable then read the bytes to file
-				file = (char *)malloc(512 * sizeof(char));   /// len = 512
-			
-    			int numbyte = fread(file, 1, 512, fp);
-    			printf("Size of Buffer:%d\n", numbyte);
-    			printf("Ftell: %d\n", ftell(fp));
+				if(fileEnd < (numPackets + 1)){
+					// Allocate mem to the file variable then read the bytes to file
+					file = (char *)malloc(512 * sizeof(char));   /// len = 512
+    				numbyte = fread(file, 1, 512, fp);	
 
-			
-				// Copy the file data bytes into the correct location of the data packet
-				bcopy(file, fileData, strlen(file));
 
-				// Clear mem
-				free(file);
+    				printf("\nSize of Buffer:%d\n", numbyte);
+    				printf("Ftell: %d\n", ftell(fp));
 
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the datapacket that is sent to the client
-				fprintf(stderr, "-------------------\n");
-				fprintf(stderr, "Sent RRQ datapacket\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", dataPacket[i]);
+					// Copy the file data bytes into the correct location of the data packet
+			        bcopy(file, fileData, strlen(file));
+
+					// Clear mem
+					free(file);
+
+					/* ---------- FOR DEBUGGING ---------- */
+					// Print the datapacket that is sent to the client
+					fprintf(stderr, "-------------------\n");
+					fprintf(stderr, "Sent RRQ datapacket\n");
+					for (int i = 0; i < 30; i++) 
+					{
+						fprintf(stderr, "0x%X,", dataPacket[i]);
+					}
+					fprintf(stderr, "\n-------------------\n");
+					fprintf(stderr, "\n");
+					/* ------------------------------------ */
+
+					int test = sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen);
+					printf("NUMBER OF BYTES SENT: %d\n", test);
+
+					
+				}else{
+					file = (char *)malloc(bytesLeft * sizeof(char));
+					numbyte = fread(file, 1, bytesLeft, fp);
+
+
+    				printf("\nSize of Buffer:%d\n", numbyte);
+    				printf("Ftell: %d\n", ftell(fp));
+
+					bcopy(file, fileData2, strlen(file));
+
+					// Clear mem
+					free(file);
+
+					/* ---------- FOR DEBUGGING ---------- */
+					// Print the datapacket that is sent to the client
+					fprintf(stderr, "-------------------\n");
+					fprintf(stderr, "Sent RRQ datapacket\n");
+					for (int i = 0; i < 30; i++) 
+					{
+					fprintf(stderr, "0x%X,", partialPacket[i]);
+					}
+					fprintf(stderr, "\n-------------------\n");
+					fprintf(stderr, "\n");
+					/* ------------------------------------ */
+
+
+					int test = sendto(sockfd, partialPacket,  (bytesLeft + 4), 0, &pcli_addr, clilen);
+					printf("NUMBER OF BYTES SENT: %d\n", test);
+
 				}
-				fprintf(stderr, "\n-------------------\n");
-				fprintf(stderr, "\n");
-				/* ------------------------------------ */
+
+
+
 
 				// Send datapacket
+
+				/*
 				if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
 				{
 					printf("%s: sendto error on socket\n",progname);
 					exit(3);
 				}
+				*/
+
 
 
 				// Reset buffer
 				bzero (buffer, sizeof(buffer));
 
 				if(numbyte < 512){
-					printf("\nIN HEREEE\n");
-					fileEnd = 1;
+					printf("\nIN HEREEE FILE END?\n");
+					// fileEnd = 1;
 					break;
 				}
 
@@ -196,6 +263,7 @@ int sockfd;
 				unsigned short *opCodePtrRcv = (unsigned short*) buffer;
 				unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
 				fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+				fprintf(stderr, "\n-------------------\n");
 			
 			}
 
