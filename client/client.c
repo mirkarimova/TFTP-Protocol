@@ -70,7 +70,7 @@ char *fileName;
 
 		int fileEnd = 0; 
 		FILE *fp = fopen(fileName, "w+");
-		unsigned short blockNum = -1;
+		unsigned short blockNum = 0;
 		while(fileEnd == 0){
 			
 			blockNum++;
@@ -78,8 +78,10 @@ char *fileName;
 			// Reset buffer
 			bzero (buffer, sizeof(buffer));
 
+			
 			// Recieve file from server
 			int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen);
+			
 			// Error check recieve
 			if (n < 0)
 			{
@@ -115,7 +117,6 @@ char *fileName;
 				exit(1);
 			}
 			if(n < 516){
-				printf("\nAT THE END");
 				fileEnd = 1; 
 				break;
 			}else if(n == 516){  // SEND ACK PACKET 
@@ -150,7 +151,6 @@ char *fileName;
 					printf("Errno: %d", errno);
 					exit(3);
 				}	
-				//fileEnd = 1; 
 			}
 		}
 		fclose(fp);

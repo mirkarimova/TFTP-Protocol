@@ -22,38 +22,24 @@ server_listen(sockfd)
 int sockfd;
 {
 	printf("Server listening to requests\n");
-/* struct sockaddr is a general purpose data structure that holds  */
-/* information about a socket that can use a variety of protocols. */
-/* Here, we use Internet family protocols and UDP datagram ports.  */
-/* This structure receives the client's address whenever a         */
-/* datagram arrives, so it needs no initialization.                */
 	
 	struct sockaddr pcli_addr;
 	
-/* Temporary variables, counters and buffers.                      */
-
+	/* Temporary variables, counters and buffers.                      */
 	int    n, clilen;
 	char   buffer[MAX_BUFF_SIZE];
 
-/* Main echo server loop. Note that it never terminates, as there  */
-/* is no way for UDP to know when the data are finished.           */
-
+	/* Main echo server loop. Note that it never terminates, as there  */
+	/* is no way for UDP to know when the data are finished.           */
 	for ( ; ; ) {
-/* Initialize the maximum size of the structure holding the        */
-/* client's address.                                               */
-
+	
+		// Initialize max size of structure holding clients address
 		clilen = sizeof(struct sockaddr);
 
-/* Receive data on socket sockfd, up to a maximum of MAX_BUFF_SIZE */
-/* bytes, and store them in buffer. The sender's address is stored   */
-/* in pcli_addr and the structure's size is stored in clilen.      */
-		
+
+		// pcli_addr: senders address stored here // clilien: structure size 
 		n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
 		
-/* n holds now the number of received bytes, or a negative number  */
-/* to show an error condition. Notice how we use progname to label */
-/* the source of the error.                                        */
-
 		if (n < 0)
 		{
 			printf("%s: recvfrom error\n",progname);
@@ -93,9 +79,6 @@ int sockfd;
 			fprintf(stderr, "Recieved filename: %s\n", fileName);
 			/* ------------------------------------ */
 		
-			
-			int fileEnd = 0;
-			unsigned short blockNum = 0;
 
 			FILE *fp = fopen(fileName, "r");
   			fseek(fp, 0, SEEK_END);
@@ -105,12 +88,19 @@ int sockfd;
 
 			// how many bytes left in extra packet 
 				int bytesLeft = sizeFile % 512;
-				printf("BYTES LEFT IN EXTRA PACKET: %d\n", bytesLeft);
+				printf("Bytes left in extra packet: %d\n", bytesLeft);
 
 			// how many full packets sent 
 				int numPackets = sizeFile / 512;
 				printf("Number of full packets sent: %d\n", numPackets);
 
+			// total packets sent
+				int totalPackets = 0;
+				if(bytesLeft != 0){
+					totalPackets = numPackets +1;
+				}else{
+					totalPackets = numPackets;
+				}
 
 			// Construct Data packet for full packet
 				char dataPacket[MAX_BUFF_SIZE];
@@ -118,7 +108,11 @@ int sockfd;
 			// Construct Data packet for partial packet 
 				char partialPacket[bytesLeft + 4];
 
-			while(fileEnd <= (numPackets + 1)){
+			
+			int fileEnd = 0;
+			unsigned short blockNum = 0;
+			while(fileEnd <= totalPackets){
+				
 				
 				fileEnd++;
 				blockNum++;
@@ -142,12 +136,11 @@ int sockfd;
 				char *fileData2 = partialPacket + DATA_OFFSET;
 
 
-
 				// Get file data from fileName
 				char *file;
 				int numbyte = 0;
 
-				if(fileEnd < (numPackets + 1)){
+				if(fileEnd < totalPackets || bytesLeft == 0 && (sizeFile != ftell(fp))){
 					// Allocate mem to the file variable then read the bytes to file
 					file = (char *)malloc(512 * sizeof(char));   /// len = 512
     				numbyte = fread(file, 1, 512, fp);	
@@ -174,11 +167,14 @@ int sockfd;
 					fprintf(stderr, "\n");
 					/* ------------------------------------ */
 
-					int test = sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen);
-					printf("NUMBER OF BYTES SENT: %d\n", test);
-
+					if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+					{
+						printf("%s: sendto error on socket\n",progname);
+						exit(3);
+					}
 					
 				}else{
+
 					file = (char *)malloc(bytesLeft * sizeof(char));
 					numbyte = fread(file, 1, bytesLeft, fp);
 
@@ -203,35 +199,23 @@ int sockfd;
 					fprintf(stderr, "\n");
 					/* ------------------------------------ */
 
-
-					int test = sendto(sockfd, partialPacket,  (bytesLeft + 4), 0, &pcli_addr, clilen);
-					printf("NUMBER OF BYTES SENT: %d\n", test);
+					if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
+					{
+						printf("%s: sendto error on socket\n",progname);
+						exit(3);
+					}
 
 				}
 
-
-
-
-				// Send datapacket
-
-				/*
-				if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-				{
-					printf("%s: sendto error on socket\n",progname);
-					exit(3);
+				// If last packet is less than 512 break no need for ACK 
+				if(numbyte < 512){
+					break;
 				}
-				*/
-
-
+				
 
 				// Reset buffer
 				bzero (buffer, sizeof(buffer));
 
-				if(numbyte < 512){
-					printf("\nIN HEREEE FILE END?\n");
-					// fileEnd = 1;
-					break;
-				}
 
 				// Recieve ACK
 				// Recieve file from server
@@ -264,6 +248,8 @@ int sockfd;
 				unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
 				fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
 				fprintf(stderr, "\n-------------------\n");
+
+			
 			
 			}
 
