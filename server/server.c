@@ -20,9 +20,7 @@ const static int REQUEST_OFFSET = 2;
 
 server_listen(sockfd) 
 int sockfd;
-{
-	printf("Server listening to requests\n");
-	
+{	
 	struct sockaddr pcli_addr;
 	
 	/* Temporary variables, counters and buffers.                      */
@@ -32,6 +30,7 @@ int sockfd;
 	/* Main echo server loop. Note that it never terminates, as there  */
 	/* is no way for UDP to know when the data are finished.           */
 	for ( ; ; ) {
+		printf("\nServer listening to requests\n");
 	
 		// Initialize max size of structure holding clients address
 		clilen = sizeof(struct sockaddr);
@@ -333,8 +332,9 @@ int sockfd;
 				/* ------------------------------------ */
 				
 				// Copy only the file data to write
-				char data[512];
+				char data[513];
 				bcopy(buffer + DATA_OFFSET, data, sizeof(data));
+				data[513] = '\0';
 
 				// Write the data to a file
 				// FILE *fp = fopen(fileName, "w+");

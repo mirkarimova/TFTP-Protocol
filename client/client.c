@@ -97,7 +97,7 @@ char *fileName;
 			// Print the recieved data packet from the server
 			fprintf(stderr, "-------------------\n");
 			fprintf(stderr, "Recieved data packet\n");
-			for (int i = 0; i < 30; i++) 
+			for (int i = 0; i < 520; i++) 
 			{
 			fprintf(stderr, "0x%X,", buffer[i]);
 			}
@@ -244,7 +244,7 @@ char *fileName;
 			int totalPackets = 0;
 			if(bytesLeft != 0)
 			{
-				totalPackets = numPackets +1;
+				totalPackets = numPackets + 1;
 			}
 			else
 			{
@@ -304,7 +304,7 @@ char *fileName;
 					free(file);
 
 					/* ---------- FOR DEBUGGING ---------- */
-					// Print the datapacket that is sent to the client
+					// Print the datapacket that is sent to the server
 					fprintf(stderr, "-------------------\n");
 					fprintf(stderr, "Sent WRQ datapacket\n");
 					for (int i = 0; i < 30; i++) 
