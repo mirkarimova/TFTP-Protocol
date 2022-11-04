@@ -248,9 +248,6 @@ int sockfd;
 				unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
 				fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
 				fprintf(stderr, "\n-------------------\n");
-
-			
-			
 			}
 
 		}
@@ -266,7 +263,7 @@ int sockfd;
 			fprintf(stderr, "Recieved filename: %s\n", fileName);
 			/* ------------------------------------ */
 
-			// Construct ACK Packet
+			// Construct 0th ACK Packet
 			char ackPacket[MAX_BUFF_SIZE];
 			bzero(ackPacket, sizeof(ackPacket));
 
@@ -282,7 +279,7 @@ int sockfd;
 			/* ---------- FOR DEBUGGING ---------- */
 			// Print the ACK packet that is sent to the client
 			fprintf(stderr, "-------------------\n");
-			fprintf(stderr, "Sent ACK packet\n");
+			fprintf(stderr, "Sent 0th ACK packet\n");
 			for (int i = 0; i < 30; i++) 
 			{
 				fprintf(stderr, "0x%X,", ackPacket[i]);
@@ -291,7 +288,7 @@ int sockfd;
 			fprintf(stderr, "\n");
 			/* ------------------------------------ */
 
-			// Send ACK
+			// Send 0th ACK
 			if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
 			{
 				printf("%s: sendto error on socket\n",progname);
@@ -299,45 +296,94 @@ int sockfd;
 			}
 
 			// Recieve Data
-			// Reset buffer
-			bzero (buffer, sizeof(buffer));
-
-			// Recieve file from server
-			int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
-			
-			// Error check recieve
-			if (n < 0)
-			{
-				printf("%s: recvfrom error\n",progname);
-				exit(3);
-			}
-			else 
-			{
-				fprintf(stderr, "Successful recieve\n");
-			}
-
-			/* ---------- FOR DEBUGGING ---------- */
-			// Print the recieved data packet from the server
-			fprintf(stderr, "-------------------\n");
-			fprintf(stderr, "Recieved data packet\n");
-			for (int i = 0; i < 30; i++) 
-			{
-				fprintf(stderr, "0x%X,", buffer[i]);
-			}
-			fprintf(stderr, "\n-------------------\n");
-			fprintf(stderr, "\n");
-			/* ------------------------------------ */
-			
-			// Copy only the file data to write
-			char data[512];
-			bcopy(buffer + DATA_OFFSET, data, sizeof(data));
-
-			// Write the data to a file
+			int fileEnd = 0;
 			FILE *fp = fopen(fileName, "w+");
-			if (fputs(data, fp) == EOF)
+
+			while (fileEnd == 0) 
 			{
-				perror("Error fputs");
-				exit(1);
+				blockNum++;
+
+				// Reset buffer
+				bzero (buffer, sizeof(buffer));
+
+				// Recieve file from server
+				int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
+				
+				// Error check recieve
+				if (n < 0)
+				{
+					printf("%s: recvfrom error\n",progname);
+					exit(3);
+				}
+				else 
+				{
+					fprintf(stderr, "Successful recieve\n");
+				}
+
+				/* ---------- FOR DEBUGGING ---------- */
+				// Print the recieved data packet from the server
+				fprintf(stderr, "-------------------\n");
+				fprintf(stderr, "Recieved data packet\n");
+				for (int i = 0; i < 30; i++) 
+				{
+					fprintf(stderr, "0x%X,", buffer[i]);
+				}
+				fprintf(stderr, "\n-------------------\n");
+				fprintf(stderr, "\n");
+				/* ------------------------------------ */
+				
+				// Copy only the file data to write
+				char data[512];
+				bcopy(buffer + DATA_OFFSET, data, sizeof(data));
+
+				// Write the data to a file
+				// FILE *fp = fopen(fileName, "w+");
+				if (fputs(data, fp) == EOF)
+				{
+					perror("Error fputs");
+					exit(1);
+				}
+
+				// Check if partial or full packet
+				if (n < MAX_BUFF_SIZE) 
+				{
+					fileEnd = 1;
+					break;
+				}
+				else if (n == 516)
+				{
+					// Construct ACK packet
+					char moreAckPacket[MAX_BUFF_SIZE];
+					bzero(moreAckPacket, sizeof (moreAckPacket));
+
+					unsigned short *opCodePtr2 = (unsigned short*) moreAckPacket;
+					// Opcode for ack packet is 4 (RFC 1350)
+					*opCodePtr2 = htons(4);
+					opCodePtr2++;
+			
+					unsigned short *blockNumPtr2 = opCodePtr2;
+					*blockNumPtr2 = htons(blockNum);
+
+					/* ---------- FOR DEBUGGING ---------- */
+					// Print the ACK packet that is sent to the client
+					fprintf(stderr, "-------------------\n");
+					fprintf(stderr, "Sent ACK packet\n");
+					for (int i = 0; i < 30; i++) 
+					{
+						fprintf(stderr, "0x%X,", moreAckPacket[i]);
+					}
+					fprintf(stderr, "\n-------------------\n");
+					fprintf(stderr, "\n");
+					/* ------------------------------------ */
+
+					// Send ACK
+					if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
+					{
+						printf("%s: sendto error on socket\n",progname);
+						printf("Errno: %d", errno);
+						exit(3);
+					}	
+				}
 			}
 			fclose(fp);
 		}
