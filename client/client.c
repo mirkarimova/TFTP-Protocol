@@ -37,6 +37,8 @@ char *fileName;
 	// RRQ
 	if (strcmp(request, "-r") == 0)
 	{
+
+
 		// Construct RRQ packet
 		int len = 0;
 
@@ -159,6 +161,7 @@ char *fileName;
 	// WRQ
 	else if (strcmp(request, "-w") == 0) 
 	{
+
 		// Construct WRQ packet
 		int len = 0;
 
@@ -194,6 +197,7 @@ char *fileName;
 		bzero (buffer, sizeof(buffer));
 
 		// Recieve 0th ACK
+
 		// Recieve file from server
 		int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen);
 		
@@ -419,6 +423,7 @@ char    *argv[];
 	struct sockaddr_in      cli_addr, serv_addr;
 	progname = argv[0];
 	
+	
 	// Args to input with ./client opcode file
 	char request[50];
 	strcpy(request, argv[1]);
@@ -426,6 +431,43 @@ char    *argv[];
 	strcpy(filename, argv[2]);
 	printf("%s\n", request);
 	printf("%s\n", filename);
+
+
+	// Checking if file already exists RRQ, checking if file does not exist WRQ
+	if(strcmp(request, "-r") == 0){
+		FILE *file; 
+		file = fopen(filename, "r");
+		if(file){
+			fclose(file);
+			printf("ERROR: File already exists\n");
+			exit(1);
+		}else{
+			printf("File does not exist\n"); 
+		}
+	}else if(strcmp(request, "-w") == 0){
+		FILE *file;
+		file = fopen(filename, "r");
+		if(file){
+			printf("File exists\n");
+		}else{	
+			printf("File either does not exist or no access priviledges\n");
+			exit(1);
+		}
+	}else{
+		printf("Invalid request\n");
+		exit(1);
+	}
+	
+
+
+    // Port number command line arguments 
+	char portNum[50];
+	int iPortNum = 0;
+	if(argv[3] != NULL && strcmp(argv[3], "-p") == 0 && argv[4] != NULL){
+		strcpy(portNum, argv[4]);
+		iPortNum = atoi(portNum);
+		printf("PORT NUM: %d\n", iPortNum);
+	}
 
 
 /* Initialize first the server's data with the well-known numbers. */
@@ -437,8 +479,13 @@ char    *argv[];
 /* use inet_addr to convert the dotted decimal notation to it.     */
 
 	serv_addr.sin_addr.s_addr = inet_addr(SERV_HOST_ADDR);
-	serv_addr.sin_port        = htons(SERV_UDP_PORT);
-
+	
+	if(iPortNum == 0){
+		serv_addr.sin_port  = htons(SERV_UDP_PORT);
+	}else{
+		serv_addr.sin_port  = htons(iPortNum);
+	}
+	
 /* Create the socket for the client side.                          */
 	
 	if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
