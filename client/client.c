@@ -107,6 +107,38 @@ char *fileName;
 			fprintf(stderr, "\n");
 			/* ------------------------------------ */
 
+			// ERROR CHECK: File does not exist on server/Does not have permission to read 
+			
+			// Determine opcode
+			unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+			unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+			fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+			fprintf(stderr, "\n-------------------\n");
+
+			// If Error Packet 
+			if(opCodeRcv == 5){
+				opCodePtrRcv++;
+				unsigned short errorCode = ntohs(*opCodePtrRcv);
+				printf("Recieved error code is %d\n", errorCode);
+				printf("-----------------------------\n");
+
+				if(errorCode == 1){
+					printf("Error: File not found on server\n");
+				}else if(errorCode == 2){
+					printf("Error: File does not have read permissions\n");
+				}
+
+				exit(1);
+			}
+
+
+			/*
+			opCodePtrRcv++;
+			unsigned short blockNum = ntohs(*opCodePtrRcv);
+			printf("Recieved block number is %d\n", blockNum);
+			printf("-----------------------------\n");
+			*/
+
 			// Copy only the file data to write
 			char data[512];
 			bcopy(buffer + DATA_OFFSET, data, sizeof(data));
@@ -400,9 +432,17 @@ char *fileName;
 				fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
 				fprintf(stderr, "\n-------------------\n");
 			}
-		} else 
+		} else if(opCodeRcv == 5)
 		{
-			// Error
+			opCodePtrRcv++;
+			unsigned short errorCode = ntohs(*opCodePtrRcv);
+			printf("Recieved error code is %d\n", errorCode);
+			printf("-----------------------------\n");
+
+			if(errorCode == 6){
+				printf("Error: File already exists \n");
+			}
+
 		}		
 	}
 } 	
@@ -429,8 +469,8 @@ char    *argv[];
 	strcpy(request, argv[1]);
 	char filename[50];
 	strcpy(filename, argv[2]);
-	printf("%s\n", request);
-	printf("%s\n", filename);
+	printf("Request: %s\n", request);
+	printf("Filename: %s\n", filename);
 
 
 	// Checking if file already exists RRQ, checking if file does not exist WRQ
@@ -442,15 +482,15 @@ char    *argv[];
 			printf("ERROR: File already exists\n");
 			exit(1);
 		}else{
-			printf("File does not exist\n"); 
+			printf("Success: File does not exist\n"); 
 		}
 	}else if(strcmp(request, "-w") == 0){
 		FILE *file;
 		file = fopen(filename, "r");
 		if(file){
-			printf("File exists\n");
+			printf("Success: File exists\n");
 		}else{	
-			printf("File either does not exist or no access priviledges\n");
+			printf("ERROR: File either does not exist or no access priviledges\n");
 			exit(1);
 		}
 	}else{
@@ -466,7 +506,7 @@ char    *argv[];
 	if(argv[3] != NULL && strcmp(argv[3], "-p") == 0 && argv[4] != NULL){
 		strcpy(portNum, argv[4]);
 		iPortNum = atoi(portNum);
-		printf("PORT NUM: %d\n", iPortNum);
+		printf("Port number input: %d\n", iPortNum);
 	}
 
 

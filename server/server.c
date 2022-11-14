@@ -78,10 +78,11 @@ int sockfd;
 			fprintf(stderr, "Recieved filename: %s\n", fileName);
 			/* ------------------------------------ */
 		
-			if (access(filename, F_OK) != 0) 
+			if (access(fileName, F_OK) != 0) 
 			{
 				// File does not exist
-				char errMsg[100] = "File not found";
+
+				int len2 = 0; 
 
 				// Construct error packet
 				char errBuffer[MAX_BUFF_SIZE];
@@ -89,15 +90,11 @@ int sockfd;
 
 				unsigned short opCode = htons(5);
 				memcpy(errBuffer, &opCode, 2);
-				len += 2;
+				len2 += 2;
 
 				unsigned short errCode = htons(1);
-				memcpy(errBuffer, &errCode, 2);
-				len += 2;
-
-				strncpy(errBuffer + len, errMsg, strlen(errMsg));
-				len += strlen(errMsg);
-
+				memcpy(errBuffer + len, &errCode, 2);
+				len2 += 2;
 				
 				/* ---------- FOR DEBUGGING ---------- */
 				// Print the error packet that is sent to the client
@@ -117,10 +114,11 @@ int sockfd;
 					exit(3);
 				}
 			} 
-			else if (access(filename, R_OK) != 0)
+			else if (access(fileName, R_OK) != 0)
 			{
-				// File does not have read permissions
-				char errMsg[100] = "Invalid permissions";
+				// No access permissions for file
+
+				int len2 = 0; 
 
 				// Construct error packet
 				char errBuffer[MAX_BUFF_SIZE];
@@ -128,15 +126,11 @@ int sockfd;
 
 				unsigned short opCode = htons(5);
 				memcpy(errBuffer, &opCode, 2);
-				len += 2;
+				len2 += 2;
 
 				unsigned short errCode = htons(2);
-				memcpy(errBuffer, &errCode, 2);
-				len += 2;
-
-				strncpy(errBuffer + len, errMsg, strlen(errMsg));
-				len += strlen(errMsg);
-
+				memcpy(errBuffer + len, &errCode, 2);
+				len2 += 2;
 				
 				/* ---------- FOR DEBUGGING ---------- */
 				// Print the error packet that is sent to the client
@@ -342,10 +336,12 @@ int sockfd;
 			fprintf(stderr, "Recieved filename: %s\n", fileName);
 			/* ------------------------------------ */
 
-			if (access(filename, F_OK) == 0)
+			if (access(fileName, F_OK) == 0)
 			{
 				// File exists, overwrite error
 				char errMsg[100] = "Overwrite error, file already exists";
+
+				int len2 = 0; 
 
 				// Construct error packet
 				char errBuffer[MAX_BUFF_SIZE];
@@ -353,15 +349,11 @@ int sockfd;
 
 				unsigned short opCode = htons(5);
 				memcpy(errBuffer, &opCode, 2);
-				len += 2;
+				len2 += 2;
 
 				unsigned short errCode = htons(6);
-				memcpy(errBuffer, &errCode, 2);
-				len += 2;
-
-				strncpy(errBuffer + len, errMsg, strlen(errMsg));
-				len += strlen(errMsg);
-
+				memcpy(errBuffer + len, &errCode, 2);
+				len2 += 2;
 				
 				/* ---------- FOR DEBUGGING ---------- */
 				// Print the error packet that is sent to the client
