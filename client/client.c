@@ -71,7 +71,7 @@ char *fileName;
 		}
 
 		int fileEnd = 0; 
-		FILE *fp = fopen(fileName, "w+");
+		FILE *fp;
 		unsigned short blockNum = 0;
 		while(fileEnd == 0){
 			
@@ -131,13 +131,9 @@ char *fileName;
 				exit(1);
 			}
 
-
-			/*
-			opCodePtrRcv++;
-			unsigned short blockNum = ntohs(*opCodePtrRcv);
-			printf("Recieved block number is %d\n", blockNum);
-			printf("-----------------------------\n");
-			*/
+			if(blockNum == 1){
+				fp = fopen(fileName, "w+");
+			}
 
 			// Copy only the file data to write
 			char data[512];
