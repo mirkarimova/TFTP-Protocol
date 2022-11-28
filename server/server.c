@@ -17,6 +17,13 @@ char *progname;
 const static int MAX_BUFF_SIZE = 516;
 const static int DATA_OFFSET = 4;
 const static int REQUEST_OFFSET = 2;
+unsigned int tries = 0;
+
+// Timeout occured update retransmit tries
+void sig_handler(int signum)
+{
+	printf("\nTimeout Occured\n");
+}
 
 server_listen(sockfd) 
 int sockfd;
@@ -26,6 +33,15 @@ int sockfd;
 	/* Temporary variables, counters and buffers.                      */
 	int    n, clilen;
 	char   buffer[MAX_BUFF_SIZE];
+
+	struct sigaction handler;
+    handler.sa_handler = sig_handler;
+    handler.sa_flags = 0;
+    if(sigfillset(&handler.sa_mask) < 0)
+        return 1;
+
+    if(sigaction(SIGALRM, &handler, 0) < 0)
+        return 2;
 
 	/* Main echo server loop. Note that it never terminates, as there  */
 	/* is no way for UDP to know when the data are finished.           */
@@ -245,6 +261,64 @@ int sockfd;
 							printf("%s: sendto error on socket\n",progname);
 							exit(3);
 						}
+
+						// If last packet is less than 512 break no need for ACK 
+						if(numbyte < 512){
+							break;
+						}
+						
+
+						// Reset buffer
+						bzero (buffer, sizeof(buffer));
+
+
+						// START ALARM AND RETRANSMIT IF NEEDED
+						// ---------------------------------------------------------
+						alarm(5);
+						// Recieve ACK
+						while (recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen) < 0)
+						{
+							if (errno == EINTR)
+							{
+								tries++;
+								if (tries < 10)
+								{
+									printf("Retransmitting...\n");
+									if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+									{
+										printf("%s: sendto error on socket\n",progname);
+										exit(3);
+									}
+									alarm(5);
+								}
+								else
+								{
+									printf("\nRetransmit tries exceeded\n");
+									exit(0);
+								}
+							} 
+						}
+						alarm(0);
+						tries = 0;
+						// ---------------------------------------------------------
+						// STOP ALARM IF SOMETHING IS RECIEVED
+
+						/* ---------- FOR DEBUGGING ---------- */
+						// Print the recieved data packet from the server
+						fprintf(stderr, "-------------------\n");
+						fprintf(stderr, "Recieved ack packet\n");
+						for (int i = 0; i < 30; i++) 
+						{
+							fprintf(stderr, "0x%X,", buffer[i]);
+						}
+						fprintf(stderr, "\n-------------------\n");
+						/* ------------------------------------ */
+
+						// Determine opcode
+						unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+						unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+						fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+						fprintf(stderr, "\n-------------------\n");
 						
 					}else{
 
@@ -278,49 +352,63 @@ int sockfd;
 							exit(3);
 						}
 
+						// If last packet is less than 512 break no need for ACK 
+						if(numbyte < 512){
+							break;
+						}
+						
+
+						// Reset buffer
+						bzero (buffer, sizeof(buffer));
+
+						// START ALARM AND RETRANSMIT IF NEEDED
+						// ---------------------------------------------------------
+						alarm(5);
+						// Recieve ACK
+						while(recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen) < 0)
+						{
+							if (errno == EINTR)
+							{
+								tries++;
+								if (tries < 10)
+								{
+									printf("Retransmitting...\n");
+									if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
+									{
+										printf("%s: sendto error on socket\n",progname);
+										exit(3);
+									}
+									alarm(5);
+								}
+								else
+								{
+									printf("\nRetransmit tries exceeded\n");
+									exit(0);
+								}
+							} 
+						}
+						alarm(0);
+						tries = 0;
+						// ---------------------------------------------------------
+						// STOP ALARM IF SOMETHING IS RECIEVED
+
+						/* ---------- FOR DEBUGGING ---------- */
+						// Print the recieved data packet from the server
+						fprintf(stderr, "-------------------\n");
+						fprintf(stderr, "Recieved ack packet\n");
+						for (int i = 0; i < 30; i++) 
+						{
+							fprintf(stderr, "0x%X,", buffer[i]);
+						}
+						fprintf(stderr, "\n-------------------\n");
+						/* ------------------------------------ */
+
+						// Determine opcode
+						unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+						unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+						fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+						fprintf(stderr, "\n-------------------\n");
 					}
-
-					// If last packet is less than 512 break no need for ACK 
-					if(numbyte < 512){
-						break;
-					}
-					
-
-					// Reset buffer
-					bzero (buffer, sizeof(buffer));
-
-
-					// Recieve ACK
-					// Recieve file from server
-					int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
-			
-					// Error check recieve
-					if (n < 0)
-					{
-						printf("%s: recvfrom error\n",progname);
-						exit(3);
-					}
-					else 
-					{
-						fprintf(stderr, "Successful recieve\n");
-					}
-
-					/* ---------- FOR DEBUGGING ---------- */
-					// Print the recieved data packet from the server
-					fprintf(stderr, "-------------------\n");
-					fprintf(stderr, "Recieved ack packet\n");
-					for (int i = 0; i < 30; i++) 
-					{
-						fprintf(stderr, "0x%X,", buffer[i]);
-					}
-					fprintf(stderr, "\n-------------------\n");
-					/* ------------------------------------ */
-
-					// Determine opcode
-					unsigned short *opCodePtrRcv = (unsigned short*) buffer;
-					unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
-					fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
-					fprintf(stderr, "\n-------------------\n");
 				}
 			}
 		}
@@ -414,24 +502,62 @@ int sockfd;
 
 				while (fileEnd == 0) 
 				{
-					blockNum++;
-
 					// Reset buffer
 					bzero (buffer, sizeof(buffer));
 
+					// Initialize future ack packets
+					char moreAckPacket[MAX_BUFF_SIZE];
+					bzero(moreAckPacket, sizeof (moreAckPacket));
+
+					// Check packet size
+					alarm(2);
+					int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, MSG_PEEK, &pcli_addr, &clilen);
+					tries = 0;
+					bzero (buffer, sizeof(buffer));
+
+					// START ALARM AND RETRANSMIT IF NEEDED
+					// ---------------------------------------------------------
+					alarm(5);
 					// Recieve file from server
-					int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
-					
-					// Error check recieve
-					if (n < 0)
+					while((recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen)) < 0)
 					{
-						printf("%s: recvfrom error\n",progname);
-						exit(3);
+						if (errno == EINTR)
+						{
+							tries++;
+							if (tries < 10 && blockNum == 0)
+							{
+								printf("Retransmitting...\n");
+								if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+								{
+									printf("%s: sendto error on socket\n",progname);
+									exit(3);
+								}
+								alarm(5);
+							}
+							else if (tries < 10 && blockNum != 0)
+							{
+								printf("Retransmitting...\n");
+								if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
+								{
+									printf("%s: sendto error on socket\n",progname);
+									printf("Errno: %d", errno);
+									exit(3);
+								}	
+								alarm(5);
+							}
+							else
+							{
+								printf("\nRetransmit tries exceeded\n");
+								exit(0);
+							}
+						}
 					}
-					else 
-					{
-						fprintf(stderr, "Successful recieve\n");
-					}
+					alarm(0);
+					tries = 0;
+					// ---------------------------------------------------------
+					// STOP ALARM IF SOMETHING IS RECIEVED
+
+					blockNum++;
 
 					/* ---------- FOR DEBUGGING ---------- */
 					// Print the recieved data packet from the server
@@ -464,12 +590,9 @@ int sockfd;
 						fileEnd = 1;
 						break;
 					}
-					else if (n == 516)
+					else if (n == MAX_BUFF_SIZE)
 					{
-						// Construct ACK packet
-						char moreAckPacket[MAX_BUFF_SIZE];
-						bzero(moreAckPacket, sizeof (moreAckPacket));
-
+						// Construct rest of ack packet
 						unsigned short *opCodePtr2 = (unsigned short*) moreAckPacket;
 						// Opcode for ack packet is 4 (RFC 1350)
 						*opCodePtr2 = htons(4);
@@ -529,11 +652,16 @@ char *argv[];
 /* reports.                                                        */
 
 	progname=argv[0];
-	int port = atoi(argv[1]);
+	int port = NULL;
+	if (argv[1])
+	{
+		port = atoi(argv[1]);
+		printf("Port number input: %d\n", port);
+	}
 
-/* Create a UDP socket (an Internet datagram socket). AF_INET      */
-/* means Internet protocols and SOCK_DGRAM means UDP. 0 is an      */
-/* unused flag byte. A negative value is returned on error.        */
+	/* Create a UDP socket (an Internet datagram socket). AF_INET      */
+	/* means Internet protocols and SOCK_DGRAM means UDP. 0 is an      */
+	/* unused flag byte. A negative value is returned on error.        */
 
 	if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
 		{
@@ -541,46 +669,46 @@ char *argv[];
 		 exit(1); 
 		}
 
-/* Abnormal termination using the exit call may return a specific  */
-/* integer error code to distinguish among different errors.       */
-		
-/* To use the socket created, we must assign to it a local IP      */
-/* address and a UDP port number, so that the client can send data */
-/* to it. To do this, we fisrt prepare a sockaddr structure.       */
+	/* Abnormal termination using the exit call may return a specific  */
+	/* integer error code to distinguish among different errors.       */
+			
+	/* To use the socket created, we must assign to it a local IP      */
+	/* address and a UDP port number, so that the client can send data */
+	/* to it. To do this, we fisrt prepare a sockaddr structure.       */
 
-/* The bzero function initializes the whole structure to zeroes.   */
+	/* The bzero function initializes the whole structure to zeroes.   */
 	
 	bzero((char *) &serv_addr, sizeof(serv_addr));
 	
-/* As sockaddr is a general purpose structure, we must declare     */
-/* what type of address it holds.                                  */
+	/* As sockaddr is a general purpose structure, we must declare     */
+	/* what type of address it holds.                                  */
 	
 	serv_addr.sin_family      = AF_INET;
 	
-/* If the server has multiple interfaces, it can accept calls from */
-/* any of them. Instead of using one of the server's addresses,    */
-/* we use INADDR_ANY to say that we will accept calls on any of    */
-/* the server's addresses. Note that we have to convert the host   */
-/* data representation to the network data representation.         */
-
+	/* If the server has multiple interfaces, it can accept calls from */
+	/* any of them. Instead of using one of the server's addresses,    */
+	/* we use INADDR_ANY to say that we will accept calls on any of    */
+	/* the server's addresses. Note that we have to convert the host   */
+	/* data representation to the network data representation.         */
+		
 	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-/* We must use a specific port for our server for the client to    */
-/* send data to (a well-known port).                               */
-if (port) 
-{
-	serv_addr.sin_port        = htons(port);
-}
-else 
-{
-	serv_addr.sin_port        = htons(SERV_UDP_PORT);
-}
+	/* We must use a specific port for our server for the client to    */
+	/* send data to (a well-known port).                               */
+	if (port) 
+	{
+		serv_addr.sin_port        = htons(port);
+	}
+	else 
+	{
+		serv_addr.sin_port        = htons(SERV_UDP_PORT);
+	}
 
-/* We initialize the socket pointed to by sockfd by binding to it  */
-/* the address and port information from serv_addr. Note that we   */
-/* must pass a general purpose structure rather than an Internet   */
-/* specific one to the bind call and also pass its size. A         */
-/* negative return value means an error occured.                   */
+	/* We initialize the socket pointed to by sockfd by binding to it  */
+	/* the address and port information from serv_addr. Note that we   */
+	/* must pass a general purpose structure rather than an Internet   */
+	/* specific one to the bind call and also pass its size. A         */
+	/* negative return value means an error occured.                   */
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
 	       { 

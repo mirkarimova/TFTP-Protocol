@@ -94,6 +94,9 @@ char *fileName;
 			{
 				fprintf(stderr, "Successful recieve: %d\n: ", n);
 			}
+			
+			// Uncomment below to test packet loss for RRQ ack
+			// sleep(60);
 
 			/* ---------- FOR DEBUGGING ---------- */
 			// Print the recieved data packet from the server
@@ -255,6 +258,9 @@ char *fileName;
 		unsigned short *opCodePtrRcv = (unsigned short*) buffer;
 		unsigned short opCodeRcv = htons(*opCodePtrRcv);
 		fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+
+		// Uncomment below to test packet loss for WRQ ack
+		// sleep(60);
 
 		if (opCodeRcv == 4) 
 		{
