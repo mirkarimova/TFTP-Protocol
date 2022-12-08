@@ -10,6 +10,7 @@
 #include <string.h>         // for strerror function.
 #include <signal.h>         // for the signal handler registration.
 #include <unistd.h>
+#include<pthread.h>
 
 #define SERV_UDP_PORT   51145 // REPLACE WITH YOUR PORT NUMBER
 
@@ -50,7 +51,6 @@ int sockfd;
 	
 		// Initialize max size of structure holding clients address
 		clilen = sizeof(struct sockaddr);
-
 
 		// pcli_addr: senders address stored here // clilien: structure size 
 		n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
@@ -256,6 +256,7 @@ int sockfd;
 						fprintf(stderr, "\n");
 						/* ------------------------------------ */
 
+
 						if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
 						{
 							printf("%s: sendto error on socket\n",progname);
@@ -345,6 +346,7 @@ int sockfd;
 						fprintf(stderr, "\n-------------------\n");
 						fprintf(stderr, "\n");
 						/* ------------------------------------ */
+
 
 						if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
 						{

@@ -23,13 +23,37 @@ char *progname;
 const static int MAX_BUFF_SIZE = 516;
 const static int DATA_OFFSET = 4;
 
-void send_packet(sockfd, pserv_addr, servlen, request, fileName)
+
+
+// Timeout occured update retransmit tries
+void sig_handler(int signum)
+{
+	printf("\nTimeout Occured\n");
+}
+
+
+
+int send_packet(sockfd, pserv_addr, servlen, request, fileName)
 int sockfd;
 struct sockaddr *pserv_addr;
 int servlen;
 char *request;
 char *fileName; 
 {
+
+
+	struct sigaction handler;
+    handler.sa_handler = sig_handler;
+    handler.sa_flags = 0;
+    if(sigfillset(&handler.sa_mask) < 0){
+        return 1;
+	}
+
+    if(sigaction(SIGALRM, &handler, 0) < 0){
+        return 2;
+	}
+
+	int tries = 0; 
 
 	char buffer[516];
 	bzero (buffer, sizeof(buffer));
@@ -69,6 +93,9 @@ char *fileName;
 			printf("%s: sendto error on socket\n",progname);
 			exit(3);
 		}
+		printf("Setting alarm\n");
+		alarm(5); // Initial RRQ alarm
+
 
 		int fileEnd = 0; 
 		FILE *fp;
@@ -82,18 +109,35 @@ char *fileName;
 
 			
 			// Recieve file from server
-			int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen);
-			
 			// Error check recieve
-			if (n < 0)
-			{
-				printf("%s: recvfrom error\n",progname);
-				exit(3);
+			int n; 
+			while (	(n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen)) < 0)
+			{	
+				if(errno = EINTR){
+					printf("Timeout triggered!\n");
+					tries++; 
+					if(tries <= 10){
+						printf("Retransmission Try #: %d\n", tries);
+							if (sendto(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != MAX_BUFF_SIZE) 
+							{
+								printf("%s: sendto error on socket\n",progname);
+								exit(3);
+							}
+						alarm(5);
+					}else{
+						printf("Terminating transmission tries exceeded\n");
+						exit(1);
+					}
+				}else{
+				  exit(3);
+				}
 			}
-			else 
-			{
-				fprintf(stderr, "Successful recieve: %d\n: ", n);
-			}
+			alarm(0);
+			tries = 0; 
+
+
+			fprintf(stderr, "Successful recieve: %d\n: ", n);
+
 			
 			// Uncomment below to test packet loss for RRQ ack
 			// sleep(60);
@@ -183,7 +227,8 @@ char *fileName;
 					printf("%s: sendto error on socket\n",progname);
 					printf("Errno: %d", errno);
 					exit(3);
-				}	
+				}
+				alarm(5); // Set alarm for ACK packet 
 			}
 		}
 		fclose(fp);
@@ -223,6 +268,7 @@ char *fileName;
 			printf("%s: sendto error on socket\n",progname);
 			exit(3);
 		}
+		alarm(5); // Set alarm for receiving WRQ ACK packet 
 
 		// Reset buffer
 		bzero (buffer, sizeof(buffer));
@@ -230,18 +276,30 @@ char *fileName;
 		// Recieve 0th ACK
 
 		// Recieve file from server
-		int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen);
-		
-		// Error check recieve
-		if (n < 0)
-		{
-			printf("%s: recvfrom error\n",progname);
-			exit(3);
+		int n; 
+		while (	(n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen)) < 0)
+		{	
+			if(errno = EINTR){
+				printf("Timeout triggered!\n");
+				tries++; 
+				if(tries <= 10){
+					printf("Retransmission Try #: %d\n", tries);
+						if (sendto(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != MAX_BUFF_SIZE) 
+						{
+							printf("%s: sendto error on socket\n",progname);
+							exit(3);
+						}
+					alarm(5);
+				}else{
+					printf("Terminating transmission tries exceeded\n");
+					exit(1);
+				}
+			}else{
+				exit(3);
+			}
 		}
-		else 
-		{
-			fprintf(stderr, "Successful recieve\n");
-		}
+		alarm(0);
+		tries = 0; 
 
 		/* ---------- FOR DEBUGGING ---------- */
 		// Print the recieved data packet from the server
@@ -324,8 +382,9 @@ char *fileName;
 				// Get file data from fileName
 				char *file;
 				int numbyte = 0;
+				
 
-				if(fileEnd < totalPackets || bytesLeft == 0 && (sizeFile != ftell(fp)))
+				if(fileEnd < totalPackets || bytesLeft == 0 && (sizeFile != ftell(fp)))  // full packet 
 				{
 					// Allocate mem to the file variable then read the bytes to file
 					file = (char *)malloc(512 * sizeof(char));   /// len = 512
@@ -358,8 +417,9 @@ char *fileName;
 						printf("%s: sendto error on socket\n",progname);
 						exit(3);
 					}
+					alarm(5);
 				} 
-				else
+				else // partial packet 
 				{
 
 					file = (char *)malloc(bytesLeft * sizeof(char));
@@ -404,18 +464,30 @@ char *fileName;
 
 				// Recieve ACK
 				// Recieve file from server
-				int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen);
-		
-				// Error check recieve
-				if (n < 0)
-				{
-					printf("%s: recvfrom error\n",progname);
+				int n; 
+				while (	(n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, &servlen)) < 0)
+				{	
+					if(errno = EINTR){
+					printf("Timeout triggered!\n");
+					tries++; 
+					if(tries <= 10){
+						printf("Retransmission Try #: %d\n", tries);
+							if (sendto(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != MAX_BUFF_SIZE) 
+							{
+								printf("%s: sendto error on socket\n",progname);
+								exit(3);
+							}
+						alarm(5);
+					}else{
+						printf("Terminating transmission tries exceeded\n");
+						exit(1);
+					}
+				}else{
 					exit(3);
 				}
-				else 
-				{
-					fprintf(stderr, "Successful recieve\n");
 				}
+				alarm(0);
+				tries = 0; 
 
 				/* ---------- FOR DEBUGGING ---------- */
 				// Print the recieved data packet from the server
