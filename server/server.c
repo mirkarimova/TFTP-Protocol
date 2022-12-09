@@ -26,14 +26,26 @@ void sig_handler(int signum)
 	printf("\nTimeout Occured\n");
 }
 
-server_listen(sockfd) 
-int sockfd;
-{	
+struct arg_struct{
+	int clilen;
+	int sockfd;
 	struct sockaddr pcli_addr;
-	
-	/* Temporary variables, counters and buffers.                      */
-	int    n, clilen;
-	char   buffer[MAX_BUFF_SIZE];
+	char buffer[516];
+};
+
+
+void *server_request(void *arguments)
+{	
+	struct arg_struct *args = arguments;
+	int clilen = args->clilen;
+	int sockfd = args->sockfd;
+	struct sockaddr pcli_addr = args->pcli_addr;
+	char *buffer = args->buffer;  // dont know what to do with this 
+
+	printf("SOCKFD: %d\n", sockfd);
+	printf("CLILEN: %d\n", clilen);
+	printf("SIZE OF PCLI:%d\n", sizeof(pcli_addr));
+
 
 	struct sigaction handler;
     handler.sa_handler = sig_handler;
@@ -44,26 +56,6 @@ int sockfd;
     if(sigaction(SIGALRM, &handler, 0) < 0)
         return 2;
 
-	/* Main echo server loop. Note that it never terminates, as there  */
-	/* is no way for UDP to know when the data are finished.           */
-	for ( ; ; ) {
-		printf("\nServer listening to requests\n");
-	
-		// Initialize max size of structure holding clients address
-		clilen = sizeof(struct sockaddr);
-
-		// pcli_addr: senders address stored here // clilien: structure size 
-		n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
-		
-		if (n < 0)
-		{
-			printf("%s: recvfrom error\n",progname);
-			exit(3);
-		}
-		else 
-		{
-			fprintf(stderr, "Successful recieve\n");
-		}
 
 		/* ---------- FOR DEBUGGING ---------- */
 		// Print the recieved request packet from the client
@@ -632,6 +624,49 @@ int sockfd;
 			printf("%s: invalid opcode recieved\n",progname);
 			exit(3);
 		}
+	
+	 pthread_exit(NULL);
+}
+
+void server_listen(sockfd) 
+int sockfd;
+{	
+	struct sockaddr pcli_addr;
+	
+	/* Temporary variables, counters and buffers.                      */
+	int    n, clilen;
+	char   buffer[MAX_BUFF_SIZE];
+
+
+	/* Main echo server loop. Note that it never terminates, as there  */
+	/* is no way for UDP to know when the data are finished.           */
+	for ( ; ; ) {
+		printf("\nServer listening to requests\n");
+	
+		// Initialize max size of structure holding clients address
+		clilen = sizeof(struct sockaddr);
+
+		// pcli_addr: senders address stored here // clilien: structure size 
+		n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen);
+		
+		if (n < 0)
+		{
+			printf("%s: recvfrom error\n",progname);
+			exit(3);
+		}
+		else 
+		{
+			fprintf(stderr, "Successful recieve\n");
+			struct arg_struct args;
+			args.sockfd = sockfd; 
+			args.clilen = clilen; 
+			args.pcli_addr = pcli_addr;
+
+			pthread_t thread_id;
+			pthread_create(&thread_id, NULL, &server_request, (void *)&args);
+			pthread_join(thread_id, NULL);
+		}
+
 	}
 }
 
