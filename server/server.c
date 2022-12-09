@@ -20,6 +20,8 @@ const static int DATA_OFFSET = 4;
 const static int REQUEST_OFFSET = 2;
 unsigned int tries = 0;
 
+#define MAX_BUF_SIZE 516
+
 // Timeout occured update retransmit tries
 void sig_handler(int signum)
 {
@@ -30,17 +32,22 @@ struct arg_struct{
 	int clilen;
 	int sockfd;
 	struct sockaddr pcli_addr;
-	char buffer[516];
+	char buffer[MAX_BUF_SIZE]; 
 };
 
 
 void *server_request(void *arguments)
 {	
+	printf("SLEEPING\n");
+	sleep(4);
+
 	struct arg_struct *args = arguments;
 	int clilen = args->clilen;
 	int sockfd = args->sockfd;
 	struct sockaddr pcli_addr = args->pcli_addr;
-	char *buffer = args->buffer;  // dont know what to do with this 
+	char buffer[MAX_BUFF_SIZE];
+	memcpy(buffer, args->buffer, sizeof(buffer));
+
 
 	printf("SOCKFD: %d\n", sockfd);
 	printf("CLILEN: %d\n", clilen);
@@ -661,6 +668,10 @@ int sockfd;
 			args.sockfd = sockfd; 
 			args.clilen = clilen; 
 			args.pcli_addr = pcli_addr;
+			memcpy(args.buffer, buffer, sizeof(args.buffer));
+
+			printf("CLILEN1: %d\n", clilen);
+			printf("SOCKFD1: %d\n", sockfd);
 
 			pthread_t thread_id;
 			pthread_create(&thread_id, NULL, &server_request, (void *)&args);

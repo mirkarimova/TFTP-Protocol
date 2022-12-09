@@ -373,7 +373,7 @@ char *fileName;
 				bzero(partialPacket, sizeof(partialPacket));
 				unsigned short *opCodePtr2 = (unsigned short*) partialPacket;
 				*opCodePtr2 = htons(3);
-				opCodePtr++;
+				opCodePtr2++;
 				unsigned short *blockNumPtr2 = opCodePtr2;
 				*blockNumPtr2 = htons(blockNum);
 				char *fileData2 = partialPacket + DATA_OFFSET;
