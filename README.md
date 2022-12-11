@@ -2,19 +2,19 @@
 Group Project for CSS 432: Implementing and testing TFTP 
 
 ## Directory Structure
-/CSS432_Project 
-	|-- build.sh
-	|--/common
-           |--tftp.h
-           |--tftp.c
-	|--/client
-     	|--client.c
-		|--compile_client.sh (run with build.sh)
-		|--client (executable)
-	|--/server
-		|--server.c
-		|--compile_server.sh (run with build.sh)
-		|--server (executable)
+-/CSS432_Project 
+	-|-- build.sh
+	-|--/common
+		-|--tftp.h
+		-|--tftp.c
+	-|--/client
+		-|--client.c
+		-|--compile_client.sh (run with build.sh)
+		-|--client (executable)
+	-|--/server
+		-|--server.c
+		-|--compile_server.sh (run with build.sh)
+		-|--server (executable)
 
 ## Compiling the program
 1. In the root directory CSS432_Project run the command: **bash build.sh** to compile all the necessary program files
