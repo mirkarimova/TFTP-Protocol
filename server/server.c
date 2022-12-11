@@ -59,407 +59,203 @@ void *server_request(void *arguments)
     handler.sa_handler = sig_handler;
     handler.sa_flags = 0;
     if(sigfillset(&handler.sa_mask) < 0)
+	{
         return 1;
+	}
 
     if(sigaction(SIGALRM, &handler, 0) < 0)
+	{
         return 2;
+	}
 
+	logPacket(0, buffer);
 
-		logPacket(0, buffer);
+	// Determine opcode
+	unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+	unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+	fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+	int len = 2;
 
-		// Determine opcode
-		unsigned short *opCodePtrRcv = (unsigned short*) buffer;
-		unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
-		fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
-		int len = 2;
+	// RRQ
+	if (opCodeRcv == 1) 
+	{
+		// Retrieve filename
+		char fileName[100];
+		bcopy(buffer + REQUEST_OFFSET, fileName, sizeof(fileName));
 
-		// RRQ
-		if (opCodeRcv == 1) 
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print filename recieved from client
+		fprintf(stderr, "Recieved filename: %s\n", fileName);
+		/* ------------------------------------ */
+	
+		if (access(fileName, F_OK) != 0) 
 		{
-			// Retrieve filename
-			char fileName[100];
-			bcopy(buffer + REQUEST_OFFSET, fileName, sizeof(fileName));
+			// File does not exist
 
-			/* ---------- FOR DEBUGGING ---------- */
-			// Print filename recieved from client
-			fprintf(stderr, "Recieved filename: %s\n", fileName);
-			/* ------------------------------------ */
-		
-			if (access(fileName, F_OK) != 0) 
+			int len2 = 0; 
+
+			// Construct error packet
+			char errBuffer[MAX_BUFF_SIZE];
+			bzero (errBuffer, sizeof(errBuffer));
+
+			unsigned short opCode = htons(5);
+			memcpy(errBuffer, &opCode, 2);
+			len2 += 2;
+
+			unsigned short errCode = htons(1);
+			memcpy(errBuffer + len, &errCode, 2);
+			len2 += 2;
+			
+			logPacket(1, errBuffer);
+
+			// Send error packet
+			if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
 			{
-				// File does not exist
-
-				int len2 = 0; 
-
-				// Construct error packet
-				char errBuffer[MAX_BUFF_SIZE];
-				bzero (errBuffer, sizeof(errBuffer));
-
-				unsigned short opCode = htons(5);
-				memcpy(errBuffer, &opCode, 2);
-				len2 += 2;
-
-				unsigned short errCode = htons(1);
-				memcpy(errBuffer + len, &errCode, 2);
-				len2 += 2;
-				
-				logPacket(1, errBuffer);
-
-				// Send error packet
-				if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-				{
-					printf("%s: sendto error on socket\n",progname);
-					exit(3);
-				}
-			} 
-			else if (access(fileName, R_OK) != 0)
-			{
-				// No access permissions for file
-
-				int len2 = 0; 
-
-				// Construct error packet
-				char errBuffer[MAX_BUFF_SIZE];
-				bzero (errBuffer, sizeof(errBuffer));
-
-				unsigned short opCode = htons(5);
-				memcpy(errBuffer, &opCode, 2);
-				len2 += 2;
-
-				unsigned short errCode = htons(2);
-				memcpy(errBuffer + len, &errCode, 2);
-				len2 += 2;
-				
-				logPacket(1, errBuffer);
-
-				// Send error packet
-				if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-				{
-					printf("%s: sendto error on socket\n",progname);
-					exit(3);
-				}
+				printf("%s: sendto error on socket\n",progname);
+				exit(3);
 			}
-			else 
+		} 
+		else if (access(fileName, R_OK) != 0)
+		{
+			// No access permissions for file
+
+			int len2 = 0; 
+
+			// Construct error packet
+			char errBuffer[MAX_BUFF_SIZE];
+			bzero (errBuffer, sizeof(errBuffer));
+
+			unsigned short opCode = htons(5);
+			memcpy(errBuffer, &opCode, 2);
+			len2 += 2;
+
+			unsigned short errCode = htons(2);
+			memcpy(errBuffer + len, &errCode, 2);
+			len2 += 2;
+			
+			logPacket(1, errBuffer);
+
+			// Send error packet
+			if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
 			{
-				// Read file
-				FILE *fp = fopen(fileName, "r");
-				fseek(fp, 0, SEEK_END);
-				int sizeFile = ftell(fp);
-				printf("Size of file: %d\n\n", sizeFile);
-				fseek(fp, 0, SEEK_SET);
-
-				// how many bytes left in extra packet 
-					int bytesLeft = sizeFile % 512;
-					printf("Bytes left in extra packet: %d\n", bytesLeft);
-
-				// how many full packets sent 
-					int numPackets = sizeFile / 512;
-					printf("Number of full packets sent: %d\n", numPackets);
-
-				// total packets sent
-					int totalPackets = 0;
-					if(bytesLeft != 0){
-						totalPackets = numPackets +1;
-					}else{
-						totalPackets = numPackets;
-					}
-
-				// Construct Data packet for full packet
-					char dataPacket[MAX_BUFF_SIZE + 1];
-
-				// Construct Data packet for partial packet 
-					char partialPacket[bytesLeft + 5];
-
-				
-				int fileEnd = 0;
-				unsigned short blockNum = 0;
-				while(fileEnd <= totalPackets){
-					
-					
-					fileEnd++;
-					blockNum++;
-
-					// Full packets 
-					bzero(dataPacket, sizeof(dataPacket));
-					unsigned short *opCodePtr = (unsigned short*) dataPacket;
-					*opCodePtr = htons(3);   // Opcode for data packet is 3 (RFC 1350)
-					opCodePtr++;
-					unsigned short *blockNumPtr = opCodePtr;
-					*blockNumPtr = htons(blockNum);
-					char *fileData = dataPacket + DATA_OFFSET;
-
-					// Partial Packet
-					bzero(partialPacket, sizeof(partialPacket));
-					unsigned short *opCodePtr2 = (unsigned short*) partialPacket;
-					*opCodePtr2 = htons(3);
-					opCodePtr2++;
-					unsigned short *blockNumPtr2 = opCodePtr2;
-					*blockNumPtr2 = htons(blockNum);
-					char *fileData2 = partialPacket + DATA_OFFSET;
-
-
-					// Get file data from fileName
-					char *file;
-					int numbyte = 0;
-
-					if(fileEnd < totalPackets || bytesLeft == 0 && (sizeFile != ftell(fp))){
-						// Allocate mem to the file variable then read the bytes to file
-						file = (char *)malloc(512 * sizeof(char));   /// len = 512
-						numbyte = fread(file, 1, 512, fp);	
-
-
-						printf("\nSize of Buffer:%d\n", numbyte);
-						printf("Ftell: %d\n", ftell(fp));
-
-						// Copy the file data bytes into the correct location of the data packet
-						bcopy(file, fileData, strlen(file));
-
-						// Clear mem
-						free(file);
-
-						logPacket(1, dataPacket);
-
-
-						if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-						{
-							printf("%s: sendto error on socket\n",progname);
-							exit(3);
-						}
-
-						// If last packet is less than 512 break no need for ACK 
-						if(numbyte < 512){
-							break;
-						}
-						
-
-						// Reset buffer
-						bzero (buffer, sizeof(buffer));
-
-
-						// START ALARM AND RETRANSMIT IF NEEDED
-						// ---------------------------------------------------------
-						alarm(5);
-						// Recieve ACK
-						while (recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen) < 0)
-						{
-							if (errno == EINTR)
-							{
-								tries++;
-								if (tries < 10)
-								{
-									printf("Retransmitting...\n");
-									if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-									{
-										printf("%s: sendto error on socket\n",progname);
-										exit(3);
-									}
-									alarm(5);
-								}
-								else
-								{
-									printf("\nRetransmit tries exceeded\n");
-									exit(0);
-								}
-							} 
-						}
-						alarm(0);
-						tries = 0;
-						// ---------------------------------------------------------
-						// STOP ALARM IF SOMETHING IS RECIEVED
-
-						logPacket(0, buffer);
-
-						// Determine opcode
-						unsigned short *opCodePtrRcv = (unsigned short*) buffer;
-						unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
-						fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
-						fprintf(stderr, "\n-------------------\n");
-						
-					}else{
-
-						file = (char *)malloc(bytesLeft * sizeof(char));
-						numbyte = fread(file, 1, bytesLeft, fp);
-
-
-						printf("\nSize of Buffer:%d\n", numbyte);
-						printf("Ftell: %d\n", ftell(fp));
-
-						bcopy(file, fileData2, strlen(file));
-
-						// Clear mem
-						free(file);
-
-						logPacket(1, partialPacket);
-
-						if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
-						{
-							printf("%s: sendto error on socket\n",progname);
-							exit(3);
-						}
-
-						// If last packet is less than 512 break no need for ACK 
-						if(numbyte < 512){
-							break;
-						}
-						
-
-						// Reset buffer
-						bzero (buffer, sizeof(buffer));
-
-						// START ALARM AND RETRANSMIT IF NEEDED
-						// ---------------------------------------------------------
-						alarm(5);
-						// Recieve ACK
-						while(recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen) < 0)
-						{
-							if (errno == EINTR)
-							{
-								tries++;
-								if (tries < 10)
-								{
-									printf("Retransmitting...\n");
-									if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
-									{
-										printf("%s: sendto error on socket\n",progname);
-										exit(3);
-									}
-									alarm(5);
-								}
-								else
-								{
-									printf("\nRetransmit tries exceeded\n");
-									exit(0);
-								}
-							} 
-						}
-						alarm(0);
-						tries = 0;
-						// ---------------------------------------------------------
-						// STOP ALARM IF SOMETHING IS RECIEVED
-
-						logPacket(0, buffer);
-
-						// Determine opcode
-						unsigned short *opCodePtrRcv = (unsigned short*) buffer;
-						unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
-						fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
-						fprintf(stderr, "\n-------------------\n");
-					}
-				}
+				printf("%s: sendto error on socket\n",progname);
+				exit(3);
 			}
 		}
-		// WRQ
-		else if (opCodeRcv == 2) 
-		{	
-			// Retrieve filename
-			char fileName[100];
-			bcopy(buffer + REQUEST_OFFSET, fileName, sizeof(fileName));
+		else 
+		{
+			// Read file
+			FILE *fp = fopen(fileName, "r");
+			fseek(fp, 0, SEEK_END);
+			int sizeFile = ftell(fp);
+			printf("Size of file: %d\n\n", sizeFile);
+			fseek(fp, 0, SEEK_SET);
 
-			/* ---------- FOR DEBUGGING ---------- */
-			// Print filename recieved from client
-			fprintf(stderr, "Recieved filename: %s\n", fileName);
-			/* ------------------------------------ */
+			// how many bytes left in extra packet 
+				int bytesLeft = sizeFile % 512;
+				printf("Bytes left in extra packet: %d\n", bytesLeft);
 
-			if (access(fileName, F_OK) == 0)
-			{
-				// File exists, overwrite error
-				char errMsg[100] = "Overwrite error, file already exists";
+			// how many full packets sent 
+				int numPackets = sizeFile / 512;
+				printf("Number of full packets sent: %d\n", numPackets);
 
-				int len2 = 0; 
-
-				// Construct error packet
-				char errBuffer[MAX_BUFF_SIZE];
-				bzero (errBuffer, sizeof(errBuffer));
-
-				unsigned short opCode = htons(5);
-				memcpy(errBuffer, &opCode, 2);
-				len2 += 2;
-
-				unsigned short errCode = htons(6);
-				memcpy(errBuffer + len, &errCode, 2);
-				len2 += 2;
-				
-				logPacket(1, errBuffer);
-
-				// Send error packet
-				if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-				{
-					printf("%s: sendto error on socket\n",progname);
-					exit(3);
+			// total packets sent
+				int totalPackets = 0;
+				if(bytesLeft != 0){
+					totalPackets = numPackets +1;
+				}else{
+					totalPackets = numPackets;
 				}
-			}
-			else 
-			{
-				// Write file
-				// Construct 0th ACK Packet
-				char ackPacket[MAX_BUFF_SIZE];
-				bzero(ackPacket, sizeof(ackPacket));
 
-				unsigned short *opCodePtr = (unsigned short*) ackPacket;
-				// Opcode for data packet is 4 (RFC 1350)
-				*opCodePtr = htons(4);
-				opCodePtr++;
+			// Construct Data packet for full packet
+				char dataPacket[MAX_BUFF_SIZE + 1];
+
+			// Construct Data packet for partial packet 
+				char partialPacket[bytesLeft + 5];
+
+			
+			int fileEnd = 0;
+			unsigned short blockNum = 0;
+			while(fileEnd <= totalPackets){
 				
-				unsigned short blockNum = 0;
+				
+				fileEnd++;
+				blockNum++;
+
+				// Full packets 
+				bzero(dataPacket, sizeof(dataPacket));
+				unsigned short *opCodePtr = (unsigned short*) dataPacket;
+				*opCodePtr = htons(3);   // Opcode for data packet is 3 (RFC 1350)
+				opCodePtr++;
 				unsigned short *blockNumPtr = opCodePtr;
 				*blockNumPtr = htons(blockNum);
+				char *fileData = dataPacket + DATA_OFFSET;
 
-				logPacket(1, ackPacket);
+				// Partial Packet
+				bzero(partialPacket, sizeof(partialPacket));
+				unsigned short *opCodePtr2 = (unsigned short*) partialPacket;
+				*opCodePtr2 = htons(3);
+				opCodePtr2++;
+				unsigned short *blockNumPtr2 = opCodePtr2;
+				*blockNumPtr2 = htons(blockNum);
+				char *fileData2 = partialPacket + DATA_OFFSET;
 
-				// Send 0th ACK
-				if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
-				{
-					printf("%s: sendto error on socket\n",progname);
-					exit(3);
-				}
 
-				// Recieve Data
-				int fileEnd = 0;
-				FILE *fp = fopen(fileName, "w+");
+				// Get file data from fileName
+				char *file;
+				int numbyte = 0;
 
-				while (fileEnd == 0) 
-				{
+				if(fileEnd < totalPackets || bytesLeft == 0 && (sizeFile != ftell(fp))){
+					// Allocate mem to the file variable then read the bytes to file
+					file = (char *)malloc(512 * sizeof(char));   /// len = 512
+					numbyte = fread(file, 1, 512, fp);	
+
+
+					printf("\nSize of Buffer:%d\n", numbyte);
+					printf("Ftell: %d\n", ftell(fp));
+
+					// Copy the file data bytes into the correct location of the data packet
+					bcopy(file, fileData, strlen(file));
+
+					// Clear mem
+					free(file);
+
+					logPacket(1, dataPacket);
+
+
+					if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+					{
+						printf("%s: sendto error on socket\n",progname);
+						exit(3);
+					}
+
+					// If last packet is less than 512 break no need for ACK 
+					if(numbyte < 512){
+						break;
+					}
+					
+
 					// Reset buffer
 					bzero (buffer, sizeof(buffer));
 
-					// Initialize future ack packets
-					char moreAckPacket[MAX_BUFF_SIZE];
-					bzero(moreAckPacket, sizeof (moreAckPacket));
-
-					// Check packet size
-					alarm(2);
-					int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, MSG_PEEK, &pcli_addr, &clilen);
-					tries = 0;
-					bzero (buffer, sizeof(buffer));
 
 					// START ALARM AND RETRANSMIT IF NEEDED
 					// ---------------------------------------------------------
 					alarm(5);
-					// Recieve file from server
-					while((recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen)) < 0)
+					// Recieve ACK
+					while (recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen) < 0)
 					{
 						if (errno == EINTR)
 						{
 							tries++;
-							if (tries < 10 && blockNum == 0)
+							if (tries < 10)
 							{
 								printf("Retransmitting...\n");
-								if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+								if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
 								{
 									printf("%s: sendto error on socket\n",progname);
 									exit(3);
 								}
-								alarm(5);
-							}
-							else if (tries < 10 && blockNum != 0)
-							{
-								printf("Retransmitting...\n");
-								if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
-								{
-									printf("%s: sendto error on socket\n",progname);
-									printf("Errno: %d", errno);
-									exit(3);
-								}	
 								alarm(5);
 							}
 							else
@@ -467,68 +263,275 @@ void *server_request(void *arguments)
 								printf("\nRetransmit tries exceeded\n");
 								exit(0);
 							}
-						}
+						} 
 					}
 					alarm(0);
 					tries = 0;
 					// ---------------------------------------------------------
 					// STOP ALARM IF SOMETHING IS RECIEVED
 
-					blockNum++;
-
 					logPacket(0, buffer);
-					
-					// Copy only the file data to write
-					char data[512];
-					data[512] = '\0';
-					bcopy(buffer + DATA_OFFSET, data, sizeof(data));
 
-					// Write the data to a file
-					// FILE *fp = fopen(fileName, "w+");
-					if (fputs(data, fp) == EOF)
+					// Determine opcode
+					unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+					unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+					fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+					fprintf(stderr, "\n-------------------\n");
+					
+				}else{
+
+					file = (char *)malloc(bytesLeft * sizeof(char));
+					numbyte = fread(file, 1, bytesLeft, fp);
+
+
+					printf("\nSize of Buffer:%d\n", numbyte);
+					printf("Ftell: %d\n", ftell(fp));
+
+					bcopy(file, fileData2, strlen(file));
+
+					// Clear mem
+					free(file);
+
+					logPacket(1, partialPacket);
+
+					if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
 					{
-						perror("Error fputs");
-						exit(1);
+						printf("%s: sendto error on socket\n",progname);
+						exit(3);
 					}
 
-					// Check if partial or full packet
-					if (n < MAX_BUFF_SIZE) 
-					{
-						fileEnd = 1;
+					// If last packet is less than 512 break no need for ACK 
+					if(numbyte < 512){
 						break;
 					}
-					else if (n == MAX_BUFF_SIZE)
+					
+
+					// Reset buffer
+					bzero (buffer, sizeof(buffer));
+
+					// START ALARM AND RETRANSMIT IF NEEDED
+					// ---------------------------------------------------------
+					alarm(5);
+					// Recieve ACK
+					while(recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen) < 0)
 					{
-						// Construct rest of ack packet
-						unsigned short *opCodePtr2 = (unsigned short*) moreAckPacket;
-						// Opcode for ack packet is 4 (RFC 1350)
-						*opCodePtr2 = htons(4);
-						opCodePtr2++;
-				
-						unsigned short *blockNumPtr2 = opCodePtr2;
-						*blockNumPtr2 = htons(blockNum);
-
-						logPacket(1, moreAckPacket);
-
-						// Send ACK
-						if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
+						if (errno == EINTR)
 						{
-							printf("%s: sendto error on socket\n",progname);
-							printf("Errno: %d", errno);
-							exit(3);
-						}	
+							tries++;
+							if (tries < 10)
+							{
+								printf("Retransmitting...\n");
+								if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
+								{
+									printf("%s: sendto error on socket\n",progname);
+									exit(3);
+								}
+								alarm(5);
+							}
+							else
+							{
+								printf("\nRetransmit tries exceeded\n");
+								exit(0);
+							}
+						} 
 					}
+					alarm(0);
+					tries = 0;
+					// ---------------------------------------------------------
+					// STOP ALARM IF SOMETHING IS RECIEVED
+
+					logPacket(0, buffer);
+
+					// Determine opcode
+					unsigned short *opCodePtrRcv = (unsigned short*) buffer;
+					unsigned short opCodeRcv = ntohs(*opCodePtrRcv);
+					fprintf(stderr, "Recieved opcode is %d\n", opCodeRcv);
+					fprintf(stderr, "\n-------------------\n");
 				}
-				fclose(fp);
+			}
+		}
+	}
+	// WRQ
+	else if (opCodeRcv == 2) 
+	{	
+		// Retrieve filename
+		char fileName[100];
+		bcopy(buffer + REQUEST_OFFSET, fileName, sizeof(fileName));
+
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print filename recieved from client
+		fprintf(stderr, "Recieved filename: %s\n", fileName);
+		/* ------------------------------------ */
+
+		if (access(fileName, F_OK) == 0)
+		{
+			// File exists, overwrite error
+			char errMsg[100] = "Overwrite error, file already exists";
+
+			int len2 = 0; 
+
+			// Construct error packet
+			char errBuffer[MAX_BUFF_SIZE];
+			bzero (errBuffer, sizeof(errBuffer));
+
+			unsigned short opCode = htons(5);
+			memcpy(errBuffer, &opCode, 2);
+			len2 += 2;
+
+			unsigned short errCode = htons(6);
+			memcpy(errBuffer + len, &errCode, 2);
+			len2 += 2;
+			
+			logPacket(1, errBuffer);
+
+			// Send error packet
+			if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+			{
+				printf("%s: sendto error on socket\n",progname);
+				exit(3);
 			}
 		}
 		else 
 		{
-			printf("%s: invalid opcode recieved\n",progname);
-			exit(3);
+			// Write file
+			// Construct 0th ACK Packet
+			char ackPacket[MAX_BUFF_SIZE];
+			bzero(ackPacket, sizeof(ackPacket));
+
+			unsigned short *opCodePtr = (unsigned short*) ackPacket;
+			// Opcode for data packet is 4 (RFC 1350)
+			*opCodePtr = htons(4);
+			opCodePtr++;
+			
+			unsigned short blockNum = 0;
+			unsigned short *blockNumPtr = opCodePtr;
+			*blockNumPtr = htons(blockNum);
+
+			logPacket(1, ackPacket);
+
+			// Send 0th ACK
+			if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+			{
+				printf("%s: sendto error on socket\n",progname);
+				exit(3);
+			}
+
+			// Recieve Data
+			int fileEnd = 0;
+			FILE *fp = fopen(fileName, "w+");
+
+			while (fileEnd == 0) 
+			{
+				// Reset buffer
+				bzero (buffer, sizeof(buffer));
+
+				// Initialize future ack packets
+				char moreAckPacket[MAX_BUFF_SIZE];
+				bzero(moreAckPacket, sizeof (moreAckPacket));
+
+				// Check packet size
+				alarm(2);
+				int n = recvfrom(sockfd, buffer, MAX_BUFF_SIZE, MSG_PEEK, &pcli_addr, &clilen);
+				tries = 0;
+				bzero (buffer, sizeof(buffer));
+
+				// START ALARM AND RETRANSMIT IF NEEDED
+				// ---------------------------------------------------------
+				alarm(5);
+				// Recieve file from server
+				while((recvfrom(sockfd, buffer, MAX_BUFF_SIZE, 0, &pcli_addr, &clilen)) < 0)
+				{
+					if (errno == EINTR)
+					{
+						tries++;
+						if (tries < 10 && blockNum == 0)
+						{
+							printf("Retransmitting...\n");
+							if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
+							{
+								printf("%s: sendto error on socket\n",progname);
+								exit(3);
+							}
+							alarm(5);
+						}
+						else if (tries < 10 && blockNum != 0)
+						{
+							printf("Retransmitting...\n");
+							if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
+							{
+								printf("%s: sendto error on socket\n",progname);
+								printf("Errno: %d", errno);
+								exit(3);
+							}	
+							alarm(5);
+						}
+						else
+						{
+							printf("\nRetransmit tries exceeded\n");
+							exit(0);
+						}
+					}
+				}
+				alarm(0);
+				tries = 0;
+				// ---------------------------------------------------------
+				// STOP ALARM IF SOMETHING IS RECIEVED
+
+				blockNum++;
+
+				logPacket(0, buffer);
+				
+				// Copy only the file data to write
+				char data[512];
+				data[512] = '\0';
+				bcopy(buffer + DATA_OFFSET, data, sizeof(data));
+
+				// Write the data to a file
+				// FILE *fp = fopen(fileName, "w+");
+				if (fputs(data, fp) == EOF)
+				{
+					perror("Error fputs");
+					exit(1);
+				}
+
+				// Check if partial or full packet
+				if (n < MAX_BUFF_SIZE) 
+				{
+					fileEnd = 1;
+					break;
+				}
+				else if (n == MAX_BUFF_SIZE)
+				{
+					// Construct rest of ack packet
+					unsigned short *opCodePtr2 = (unsigned short*) moreAckPacket;
+					// Opcode for ack packet is 4 (RFC 1350)
+					*opCodePtr2 = htons(4);
+					opCodePtr2++;
+			
+					unsigned short *blockNumPtr2 = opCodePtr2;
+					*blockNumPtr2 = htons(blockNum);
+
+					logPacket(1, moreAckPacket);
+
+					// Send ACK
+					if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
+					{
+						printf("%s: sendto error on socket\n",progname);
+						printf("Errno: %d", errno);
+						exit(3);
+					}	
+				}
+			}
+			fclose(fp);
 		}
+	}
+	else 
+	{
+		printf("%s: invalid opcode recieved\n",progname);
+		exit(3);
+	}
 	
-	 pthread_exit(NULL);
+	pthread_exit(NULL);
 }
 
 void server_listen(sockfd) 
