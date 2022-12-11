@@ -23,7 +23,33 @@ char *progname;
 const static int MAX_BUFF_SIZE = 516;
 const static int DATA_OFFSET = 4;
 
-
+void logPacket(int flag, char *buffer)
+{
+	if (flag == 0)
+	{
+		// Print the recieved packet from the client
+		printf("-------------------\n");
+		printf("Recieved packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			printf("0x%X,", buffer[i]);
+		}
+		printf("\n-------------------\n");
+	}
+	else if (flag == 1)
+	{
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print the packet that is sent to the client
+		printf("\n-------------------\n");
+		printf("Sent packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			printf("0x%X,", buffer[i]);
+		}
+		printf("\n-------------------\n");
+		/* ------------------------------------ */
+	}
+}
 
 // Timeout occured update retransmit tries
 void sig_handler(int signum)
@@ -55,7 +81,7 @@ char *fileName;
 
 	int tries = 0; 
 
-	char buffer[516];
+	char buffer[517];
 	bzero (buffer, sizeof(buffer));
 
 	// RRQ
@@ -76,16 +102,7 @@ char *fileName;
 		char mode[] = "NETASCII\0";
 		strncpy(buffer + len, mode, strlen(mode));
 
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the request packet that is sent to the server
-		fprintf(stderr, "\n-------------------\n");
-		fprintf(stderr, "Sent Request Packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			fprintf(stderr, "0x%X,", buffer[i]);
-		}
-		fprintf(stderr, "\n-------------------\n");
-		/* ------------------------------------ */
+		logPacket(1, buffer);
 
 		// Send RRQ packet
 		if (sendto(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != MAX_BUFF_SIZE) 
@@ -142,17 +159,7 @@ char *fileName;
 			// Uncomment below to test packet loss for RRQ ack
 			// sleep(60);
 
-			/* ---------- FOR DEBUGGING ---------- */
-			// Print the recieved data packet from the server
-			fprintf(stderr, "-------------------\n");
-			fprintf(stderr, "Recieved data packet\n");
-			for (int i = 0; i < 520; i++) 
-			{
-			fprintf(stderr, "0x%X,", buffer[i]);
-			}
-			fprintf(stderr, "\n-------------------\n");
-			fprintf(stderr, "\n");
-			/* ------------------------------------ */
+			logPacket(0, buffer);
 
 			// ERROR CHECK: File does not exist on server/Does not have permission to read 
 			
@@ -183,7 +190,8 @@ char *fileName;
 			}
 
 			// Copy only the file data to write
-			char data[512];
+			char data[513];
+			data[513] = "\0";
 			bcopy(buffer + DATA_OFFSET, data, sizeof(data));
 
 			// Write the data to a file
@@ -209,17 +217,7 @@ char *fileName;
 				unsigned short *blockNumPtr = opCodePtr;
 				*blockNumPtr = htons(blockNum);
 
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the ACK packet that is sent to the server
-				fprintf(stderr, "-------------------\n");
-				fprintf(stderr, "Sent ACK packet\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", ackPacket[i]);
-				}
-				fprintf(stderr, "\n-------------------\n");
-				fprintf(stderr, "\n");
-				/* ------------------------------------ */
+				logPacket(1, ackPacket);
 
 				// Send ACK
 				if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, pserv_addr, servlen) == -1 )  
@@ -251,16 +249,7 @@ char *fileName;
 		char mode[] = "NETASCII\0";
 		strncpy(buffer + len, mode, strlen(mode));
 
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the request packet that is sent to the server
-		fprintf(stderr, "\n-------------------\n");
-		fprintf(stderr, "Sent Request Packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			fprintf(stderr, "0x%X,", buffer[i]);
-		}
-		fprintf(stderr, "\n-------------------\n");
-		/* ------------------------------------ */
+		logPacket(1, buffer);
 
 		// Send WRQ packet
 		if (sendto(sockfd, buffer, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != MAX_BUFF_SIZE) 
@@ -301,16 +290,7 @@ char *fileName;
 		alarm(0);
 		tries = 0; 
 
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the recieved data packet from the server
-		fprintf(stderr, "-------------------\n");
-		fprintf(stderr, "Recieved ack packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			fprintf(stderr, "0x%X,", buffer[i]);
-		}
-		fprintf(stderr, "\n-------------------\n");
-		/* ------------------------------------ */
+		logPacket(0, buffer);
 
 		// Determine opcode
 		unsigned short *opCodePtrRcv = (unsigned short*) buffer;
@@ -400,17 +380,7 @@ char *fileName;
 					// Clear mem
 					free(file);
 
-					/* ---------- FOR DEBUGGING ---------- */
-					// Print the datapacket that is sent to the server
-					fprintf(stderr, "-------------------\n");
-					fprintf(stderr, "Sent WRQ datapacket\n");
-					for (int i = 0; i < 30; i++) 
-					{
-						fprintf(stderr, "0x%X,", dataPacket[i]);
-					}
-					fprintf(stderr, "\n-------------------\n");
-					fprintf(stderr, "\n");
-					/* ------------------------------------ */
+					logPacket(1, dataPacket);
 
 					if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, pserv_addr, servlen) != MAX_BUFF_SIZE) 
 					{
@@ -434,17 +404,7 @@ char *fileName;
 					// Clear mem
 					free(file);
 
-					/* ---------- FOR DEBUGGING ---------- */
-					// Print the datapacket that is sent to the client
-					fprintf(stderr, "-------------------\n");
-					fprintf(stderr, "Sent WRQ datapacket\n");
-					for (int i = 0; i < 30; i++) 
-					{
-					fprintf(stderr, "0x%X,", partialPacket[i]);
-					}
-					fprintf(stderr, "\n-------------------\n");
-					fprintf(stderr, "\n");
-					/* ------------------------------------ */
+					logPacket(1, partialPacket);
 
 					if (sendto(sockfd, partialPacket, (bytesLeft + 4), 0, pserv_addr, servlen) != (bytesLeft + 4)) 
 					{
@@ -489,16 +449,7 @@ char *fileName;
 				alarm(0);
 				tries = 0; 
 
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the recieved data packet from the server
-				fprintf(stderr, "-------------------\n");
-				fprintf(stderr, "Recieved ack packet\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", buffer[i]);
-				}
-				fprintf(stderr, "\n-------------------\n");
-				/* ------------------------------------ */
+				logPacket(0, buffer);
 
 				// Determine opcode
 				unsigned short *opCodePtrRcv = (unsigned short*) buffer;

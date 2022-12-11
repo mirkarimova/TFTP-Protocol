@@ -10,7 +10,7 @@
 #include <string.h>         // for strerror function.
 #include <signal.h>         // for the signal handler registration.
 #include <unistd.h>
-#include<pthread.h>
+#include <pthread.h>
 
 #define SERV_UDP_PORT   51145 // REPLACE WITH YOUR PORT NUMBER
 
@@ -21,6 +21,34 @@ const static int REQUEST_OFFSET = 2;
 unsigned int tries = 0;
 
 #define MAX_BUF_SIZE 516
+
+void logPacket(int flag, char *buffer)
+{
+	if (flag == 0)
+	{
+		// Print the recieved packet from the client
+		printf("-------------------\n");
+		printf("Recieved packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			printf("0x%X,", buffer[i]);
+		}
+		printf("\n-------------------\n");
+	}
+	else if (flag == 1)
+	{
+		/* ---------- FOR DEBUGGING ---------- */
+		// Print the packet that is sent to the client
+		printf("\n-------------------\n");
+		printf("Sent packet\n");
+		for (int i = 0; i < 30; i++) 
+		{
+			printf("0x%X,", buffer[i]);
+		}
+		printf("\n-------------------\n");
+		/* ------------------------------------ */
+	}
+}
 
 // Timeout occured update retransmit tries
 void sig_handler(int signum)
@@ -64,16 +92,7 @@ void *server_request(void *arguments)
         return 2;
 
 
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the recieved request packet from the client
-		fprintf(stderr, "-------------------\n");
-		fprintf(stderr, "Recieved request packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			fprintf(stderr, "0x%X,", buffer[i]);
-		}
-		fprintf(stderr, "\n-------------------\n");
-		/* ------------------------------------ */
+		logPacket(0, buffer);
 
 		// Determine opcode
 		unsigned short *opCodePtrRcv = (unsigned short*) buffer;
@@ -111,16 +130,7 @@ void *server_request(void *arguments)
 				memcpy(errBuffer + len, &errCode, 2);
 				len2 += 2;
 				
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the error packet that is sent to the client
-				fprintf(stderr, "\n-------------------\n");
-				fprintf(stderr, "Sent Error Packet\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", errBuffer[i]);
-				}
-				fprintf(stderr, "\n-------------------\n");
-				/* ------------------------------------ */
+				logPacket(1, errBuffer);
 
 				// Send error packet
 				if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
@@ -147,16 +157,7 @@ void *server_request(void *arguments)
 				memcpy(errBuffer + len, &errCode, 2);
 				len2 += 2;
 				
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the error packet that is sent to the client
-				fprintf(stderr, "\n-------------------\n");
-				fprintf(stderr, "Sent Error Packet\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", errBuffer[i]);
-				}
-				fprintf(stderr, "\n-------------------\n");
-				/* ------------------------------------ */
+				logPacket(1, errBuffer);
 
 				// Send error packet
 				if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
@@ -191,10 +192,10 @@ void *server_request(void *arguments)
 					}
 
 				// Construct Data packet for full packet
-					char dataPacket[MAX_BUFF_SIZE];
+					char dataPacket[MAX_BUFF_SIZE + 1];
 
 				// Construct Data packet for partial packet 
-					char partialPacket[bytesLeft + 4];
+					char partialPacket[bytesLeft + 5];
 
 				
 				int fileEnd = 0;
@@ -243,17 +244,7 @@ void *server_request(void *arguments)
 						// Clear mem
 						free(file);
 
-						/* ---------- FOR DEBUGGING ---------- */
-						// Print the datapacket that is sent to the client
-						fprintf(stderr, "-------------------\n");
-						fprintf(stderr, "Sent RRQ datapacket\n");
-						for (int i = 0; i < 30; i++) 
-						{
-							fprintf(stderr, "0x%X,", dataPacket[i]);
-						}
-						fprintf(stderr, "\n-------------------\n");
-						fprintf(stderr, "\n");
-						/* ------------------------------------ */
+						logPacket(1, dataPacket);
 
 
 						if (sendto(sockfd, dataPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
@@ -303,16 +294,7 @@ void *server_request(void *arguments)
 						// ---------------------------------------------------------
 						// STOP ALARM IF SOMETHING IS RECIEVED
 
-						/* ---------- FOR DEBUGGING ---------- */
-						// Print the recieved data packet from the server
-						fprintf(stderr, "-------------------\n");
-						fprintf(stderr, "Recieved ack packet\n");
-						for (int i = 0; i < 30; i++) 
-						{
-							fprintf(stderr, "0x%X,", buffer[i]);
-						}
-						fprintf(stderr, "\n-------------------\n");
-						/* ------------------------------------ */
+						logPacket(0, buffer);
 
 						// Determine opcode
 						unsigned short *opCodePtrRcv = (unsigned short*) buffer;
@@ -334,18 +316,7 @@ void *server_request(void *arguments)
 						// Clear mem
 						free(file);
 
-						/* ---------- FOR DEBUGGING ---------- */
-						// Print the datapacket that is sent to the client
-						fprintf(stderr, "-------------------\n");
-						fprintf(stderr, "Sent RRQ datapacket\n");
-						for (int i = 0; i < 30; i++) 
-						{
-						fprintf(stderr, "0x%X,", partialPacket[i]);
-						}
-						fprintf(stderr, "\n-------------------\n");
-						fprintf(stderr, "\n");
-						/* ------------------------------------ */
-
+						logPacket(1, partialPacket);
 
 						if (sendto(sockfd, partialPacket, (bytesLeft +4), 0, &pcli_addr, clilen) != (bytesLeft +4)) 
 						{
@@ -393,16 +364,7 @@ void *server_request(void *arguments)
 						// ---------------------------------------------------------
 						// STOP ALARM IF SOMETHING IS RECIEVED
 
-						/* ---------- FOR DEBUGGING ---------- */
-						// Print the recieved data packet from the server
-						fprintf(stderr, "-------------------\n");
-						fprintf(stderr, "Recieved ack packet\n");
-						for (int i = 0; i < 30; i++) 
-						{
-							fprintf(stderr, "0x%X,", buffer[i]);
-						}
-						fprintf(stderr, "\n-------------------\n");
-						/* ------------------------------------ */
+						logPacket(0, buffer);
 
 						// Determine opcode
 						unsigned short *opCodePtrRcv = (unsigned short*) buffer;
@@ -444,16 +406,7 @@ void *server_request(void *arguments)
 				memcpy(errBuffer + len, &errCode, 2);
 				len2 += 2;
 				
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the error packet that is sent to the client
-				fprintf(stderr, "\n-------------------\n");
-				fprintf(stderr, "Sent Error Packet\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", errBuffer[i]);
-				}
-				fprintf(stderr, "\n-------------------\n");
-				/* ------------------------------------ */
+				logPacket(1, errBuffer);
 
 				// Send error packet
 				if (sendto(sockfd, errBuffer, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
@@ -478,17 +431,7 @@ void *server_request(void *arguments)
 				unsigned short *blockNumPtr = opCodePtr;
 				*blockNumPtr = htons(blockNum);
 
-				/* ---------- FOR DEBUGGING ---------- */
-				// Print the ACK packet that is sent to the client
-				fprintf(stderr, "-------------------\n");
-				fprintf(stderr, "Sent 0th ACK packet\n");
-				for (int i = 0; i < 30; i++) 
-				{
-					fprintf(stderr, "0x%X,", ackPacket[i]);
-				}
-				fprintf(stderr, "\n-------------------\n");
-				fprintf(stderr, "\n");
-				/* ------------------------------------ */
+				logPacket(1, ackPacket);
 
 				// Send 0th ACK
 				if (sendto(sockfd, ackPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) != MAX_BUFF_SIZE) 
@@ -560,17 +503,7 @@ void *server_request(void *arguments)
 
 					blockNum++;
 
-					/* ---------- FOR DEBUGGING ---------- */
-					// Print the recieved data packet from the server
-					fprintf(stderr, "-------------------\n");
-					fprintf(stderr, "Recieved data packet\n");
-					for (int i = 0; i < 30; i++) 
-					{
-						fprintf(stderr, "0x%X,", buffer[i]);
-					}
-					fprintf(stderr, "\n-------------------\n");
-					fprintf(stderr, "\n");
-					/* ------------------------------------ */
+					logPacket(0, buffer);
 					
 					// Copy only the file data to write
 					char data[513];
@@ -602,17 +535,7 @@ void *server_request(void *arguments)
 						unsigned short *blockNumPtr2 = opCodePtr2;
 						*blockNumPtr2 = htons(blockNum);
 
-						/* ---------- FOR DEBUGGING ---------- */
-						// Print the ACK packet that is sent to the client
-						fprintf(stderr, "-------------------\n");
-						fprintf(stderr, "Sent ACK packet\n");
-						for (int i = 0; i < 30; i++) 
-						{
-							fprintf(stderr, "0x%X,", moreAckPacket[i]);
-						}
-						fprintf(stderr, "\n-------------------\n");
-						fprintf(stderr, "\n");
-						/* ------------------------------------ */
+						logPacket(1, moreAckPacket);
 
 						// Send ACK
 						if (sendto(sockfd, moreAckPacket, MAX_BUFF_SIZE, 0, &pcli_addr, clilen) == -1 )  
