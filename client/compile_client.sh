@@ -1,4 +1,4 @@
 #!/bin/sh
 
-gcc client.c -o client
+gcc client.c ../common/tftp.c -o client
 chmod 744 client

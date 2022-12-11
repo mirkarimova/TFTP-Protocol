@@ -9,7 +9,7 @@
 #include <string.h>         // for strerror function.
 #include <signal.h>         // for the signal handler registration.
 #include <unistd.h>
-
+#include "../common/tftp.h"
 
 
 
@@ -22,34 +22,6 @@
 char *progname;
 const static int MAX_BUFF_SIZE = 516;
 const static int DATA_OFFSET = 4;
-
-void logPacket(int flag, char *buffer)
-{
-	if (flag == 0)
-	{
-		// Print the recieved packet from the client
-		printf("-------------------\n");
-		printf("Recieved packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			printf("0x%X,", buffer[i]);
-		}
-		printf("\n-------------------\n");
-	}
-	else if (flag == 1)
-	{
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the packet that is sent to the client
-		printf("\n-------------------\n");
-		printf("Sent packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			printf("0x%X,", buffer[i]);
-		}
-		printf("\n-------------------\n");
-		/* ------------------------------------ */
-	}
-}
 
 // Timeout occured update retransmit tries
 void sig_handler(int signum)

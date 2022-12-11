@@ -11,6 +11,7 @@
 #include <signal.h>         // for the signal handler registration.
 #include <unistd.h>
 #include <pthread.h>
+#include "../common/tftp.h"
 
 #define SERV_UDP_PORT   51145 // REPLACE WITH YOUR PORT NUMBER
 
@@ -21,34 +22,6 @@ const static int REQUEST_OFFSET = 2;
 unsigned int tries = 0;
 
 #define MAX_BUF_SIZE 516
-
-void logPacket(int flag, char *buffer)
-{
-	if (flag == 0)
-	{
-		// Print the recieved packet from the client
-		printf("-------------------\n");
-		printf("Recieved packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			printf("0x%X,", buffer[i]);
-		}
-		printf("\n-------------------\n");
-	}
-	else if (flag == 1)
-	{
-		/* ---------- FOR DEBUGGING ---------- */
-		// Print the packet that is sent to the client
-		printf("\n-------------------\n");
-		printf("Sent packet\n");
-		for (int i = 0; i < 30; i++) 
-		{
-			printf("0x%X,", buffer[i]);
-		}
-		printf("\n-------------------\n");
-		/* ------------------------------------ */
-	}
-}
 
 // Timeout occured update retransmit tries
 void sig_handler(int signum)
