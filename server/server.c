@@ -506,9 +506,9 @@ void *server_request(void *arguments)
 					logPacket(0, buffer);
 					
 					// Copy only the file data to write
-					char data[513];
+					char data[512];
+					data[512] = '\0';
 					bcopy(buffer + DATA_OFFSET, data, sizeof(data));
-					data[513] = '\0';
 
 					// Write the data to a file
 					// FILE *fp = fopen(fileName, "w+");
