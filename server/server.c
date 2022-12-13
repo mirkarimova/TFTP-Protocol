@@ -20,6 +20,7 @@ const static int MAX_BUFF_SIZE = 516;
 const static int DATA_OFFSET = 4;
 const static int REQUEST_OFFSET = 2;
 unsigned int tries = 0;
+int port = NULL; 
 
 #define MAX_BUF_SIZE 516
 
@@ -37,14 +38,87 @@ struct arg_struct{
 };
 
 
-void *server_request(void *arguments)
+int new_Socket(){
+                  
+	int sockfd;
+	
+
+	struct sockaddr_in serv_addr;
+
+	/* Create a UDP socket (an Internet datagram socket). AF_INET      */
+	/* means Internet protocols and SOCK_DGRAM means UDP. 0 is an      */
+	/* unused flag byte. A negative value is returned on error.        */
+
+	if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+		{
+		 printf("%s: can't open datagram socket\n",progname);
+		 exit(1); 
+	}
+
+	printf("Second sockfd: %d\n", sockfd);
+	/* Abnormal termination using the exit call may return a specific  */
+	/* integer error code to distinguish among different errors.       */
+			
+	/* To use the socket created, we must assign to it a local IP      */
+	/* address and a UDP port number, so that the client can send data */
+	/* to it. To do this, we fisrt prepare a sockaddr structure.       */
+
+	/* The bzero function initializes the whole structure to zeroes.   */
+	
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+	
+	/* As sockaddr is a general purpose structure, we must declare     */
+	/* what type of address it holds.                                  */
+	
+	serv_addr.sin_family      = AF_INET;
+	
+	/* If the server has multiple interfaces, it can accept calls from */
+	/* any of them. Instead of using one of the server's addresses,    */
+	/* we use INADDR_ANY to say that we will accept calls on any of    */
+	/* the server's addresses. Note that we have to convert the host   */
+	/* data representation to the network data representation.         */
+		
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+	// serv_addr.sin_addr.s_addr = inet_addr("10.158.82.32");
+
+	/* We must use a specific port for our server for the client to    */
+	/* send data to (a well-known port).                               */
+
+	printf("PORT: %d\n", port);
+	serv_addr.sin_port  = htons(port);
+
+	/* We initialize the socket pointed to by sockfd by binding to it  */
+	/* the address and port information from serv_addr. Note that we   */
+	/* must pass a general purpose structure rather than an Internet   */
+	/* specific one to the bind call and also pass its size. A         */
+	/* negative return value means an error occured.                   */
+
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+	       { 
+		printf("%s: can't bind local address\n",progname);
+		printf("Oh dear, something went wrong with bind()! %s\n", strerror(errno));
+		exit(2);
+	 }                                  
+
+
+	
+	return sockfd;             
+}
+
+
+
+void server_request(void *arguments)
 {	
-	printf("SLEEPING\n");
-	sleep(4);
+	
+	printf("SLEEPING...\n");
+	sleep(1);
+
+
+	// create new socket + port - return new sockfd 
 
 	struct arg_struct *args = arguments;
 	int clilen = args->clilen;
-	int sockfd = args->sockfd;
+	int sockfd = new_Socket();
 	struct sockaddr pcli_addr = args->pcli_addr;
 	char buffer[MAX_BUFF_SIZE];
 	memcpy(buffer, args->buffer, sizeof(buffer));
@@ -562,19 +636,29 @@ int sockfd;
 		}
 		else 
 		{
+			
+			
 			fprintf(stderr, "Successful recieve\n");
+			port = port + 1; 
+
 			struct arg_struct args;
 			args.sockfd = sockfd; 
 			args.clilen = clilen; 
 			args.pcli_addr = pcli_addr;
 			memcpy(args.buffer, buffer, sizeof(args.buffer));
 
-			printf("CLILEN1: %d\n", clilen);
-			printf("SOCKFD1: %d\n", sockfd);
+			printf("First sockfd: %d\n", sockfd); 
 
-			pthread_t thread_id;
-			pthread_create(&thread_id, NULL, &server_request, (void *)&args);
-			pthread_join(thread_id, NULL);
+			int returnFork = fork();
+			if(returnFork == 0){
+				server_request((void*)&args);
+			}else if(returnFork > 0){
+				// parent process continues listening 
+			}else{
+				printf("Creation of child process was unsuccessful");
+				exit(1);
+			}
+
 		}
 
 	}
@@ -599,7 +683,7 @@ char *argv[];
 /* reports.                                                        */
 
 	progname=argv[0];
-	int port = NULL;
+	port = NULL;
 	if (argv[1])
 	{
 		port = atoi(argv[1]);
@@ -637,8 +721,9 @@ char *argv[];
 	/* we use INADDR_ANY to say that we will accept calls on any of    */
 	/* the server's addresses. Note that we have to convert the host   */
 	/* data representation to the network data representation.         */
-		
-	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);	
+	//serv_addr.sin_addr.s_addr = inet_addr("10.158.82.32");
 
 	/* We must use a specific port for our server for the client to    */
 	/* send data to (a well-known port).                               */
@@ -649,6 +734,7 @@ char *argv[];
 	else 
 	{
 		serv_addr.sin_port        = htons(SERV_UDP_PORT);
+		port = SERV_UDP_PORT; 
 	}
 
 	/* We initialize the socket pointed to by sockfd by binding to it  */

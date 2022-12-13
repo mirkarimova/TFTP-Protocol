@@ -14,7 +14,7 @@
 
 
 #define SERV_UDP_PORT 51145 //REPLACE WITH YOUR PORT NUMBER
-#define SERV_HOST_ADDR "127.0.0.1" //REPLACE WITH SERVER IP ADDRESS
+#define SERV_HOST_ADDR "127.0.0.1" //REPLACE WITH SERVER IP ADDRESS  // 127.0.0.1 // 10.158.82.32 Lab 2 
 
 
 /* A pointer to the name of this program for error reporting.      */
